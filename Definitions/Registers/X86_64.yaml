@@ -1,0 +1,118 @@
+profile: X86_64
+architecture: x86_64
+layout: fixed
+sets:
+  - { id: 0, name: gpr, title: General Purpose Registers }
+  - { id: 1, name: fpu, title: Floating Point Registers }
+  - { id: 2, name: simd, title: SIMD Registers }
+features:
+  - id: 0
+    name: org.gnu.gdb.i386.core
+    includes: []
+    types:
+      - name: i386_eflags
+        kind: flags
+        bits: 32
+        element: null
+        count: null
+        fields:
+          - { name: CF, start: 0, end: 0 }
+          - { name: PF, start: 2, end: 2 }
+          - { name: AF, start: 4, end: 4 }
+          - { name: ZF, start: 6, end: 6 }
+          - { name: SF, start: 7, end: 7 }
+          - { name: TF, start: 8, end: 8 }
+          - { name: IF, start: 9, end: 9 }
+          - { name: DF, start: 10, end: 10 }
+          - { name: OF, start: 11, end: 11 }
+          - { name: NT, start: 14, end: 14 }
+          - { name: RF, start: 16, end: 16 }
+          - { name: VM, start: 17, end: 17 }
+          - { name: AC, start: 18, end: 18 }
+          - { name: VIF, start: 19, end: 19 }
+          - { name: VIP, start: 20, end: 20 }
+          - { name: ID, start: 21, end: 21 }
+  - { id: 1, name: org.gnu.gdb.i386.387, includes: [], types: [] }
+  - id: 2
+    name: org.gnu.gdb.i386.sse
+    includes: []
+    types:
+      - { name: vec128, kind: vector, bits: null, element: uint8, count: 16, fields: [] }
+      - name: i386_mxcsr
+        kind: flags
+        bits: 32
+        element: null
+        count: null
+        fields:
+          - { name: IE, start: 0, end: 0 }
+          - { name: DE, start: 1, end: 1 }
+          - { name: ZE, start: 2, end: 2 }
+          - { name: OE, start: 3, end: 3 }
+          - { name: UE, start: 4, end: 4 }
+          - { name: PE, start: 5, end: 5 }
+          - { name: DAZ, start: 6, end: 6 }
+          - { name: IM, start: 7, end: 7 }
+          - { name: DM, start: 8, end: 8 }
+          - { name: ZM, start: 9, end: 9 }
+          - { name: OM, start: 10, end: 10 }
+          - { name: UM, start: 11, end: 11 }
+          - { name: PM, start: 12, end: 12 }
+          - { name: FZ, start: 15, end: 15 }
+registers:
+  - { id: 0, name: rax, alternate: null, role: result, bits: 64, offset: 0, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 0, lldb: 0, dwarf: 0, ehframe: 0 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 1, name: rbx, alternate: null, role: null, bits: 64, offset: 8, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 1, lldb: 1, dwarf: 3, ehframe: 3 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 2, name: rcx, alternate: null, role: null, bits: 64, offset: 16, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 2, lldb: 2, dwarf: 2, ehframe: 2 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 3, name: rdx, alternate: null, role: null, bits: 64, offset: 24, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 3, lldb: 3, dwarf: 1, ehframe: 1 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 4, name: rsi, alternate: null, role: null, bits: 64, offset: 32, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 4, lldb: 4, dwarf: 4, ehframe: 4 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 5, name: rdi, alternate: null, role: null, bits: 64, offset: 40, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 5, lldb: 5, dwarf: 5, ehframe: 5 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 6, name: rbp, alternate: fp, role: frame, bits: 64, offset: 48, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 6, lldb: 6, dwarf: 6, ehframe: 6 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: data_ptr }
+  - { id: 7, name: rsp, alternate: sp, role: stack, bits: 64, offset: 56, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 7, lldb: 7, dwarf: 7, ehframe: 7 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: data_ptr }
+  - { id: 8, name: r8, alternate: null, role: null, bits: 64, offset: 64, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 8, lldb: 8, dwarf: 8, ehframe: 8 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 9, name: r9, alternate: null, role: null, bits: 64, offset: 72, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 9, lldb: 9, dwarf: 9, ehframe: 9 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 10, name: r10, alternate: null, role: null, bits: 64, offset: 80, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 10, lldb: 10, dwarf: 10, ehframe: 10 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 11, name: r11, alternate: null, role: null, bits: 64, offset: 88, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 11, lldb: 11, dwarf: 11, ehframe: 11 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 12, name: r12, alternate: null, role: null, bits: 64, offset: 96, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 12, lldb: 12, dwarf: 12, ehframe: 12 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 13, name: r13, alternate: null, role: null, bits: 64, offset: 104, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 13, lldb: 13, dwarf: 13, ehframe: 13 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 14, name: r14, alternate: null, role: null, bits: 64, offset: 112, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 14, lldb: 14, dwarf: 14, ehframe: 14 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 15, name: r15, alternate: null, role: null, bits: 64, offset: 120, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 15, lldb: 15, dwarf: 15, ehframe: 15 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int64 }
+  - { id: 16, name: rip, alternate: pc, role: program, bits: 64, offset: 128, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 16, lldb: 16, dwarf: 16, ehframe: 16 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: code_ptr }
+  - { id: 17, name: eflags, alternate: flags, role: flags, bits: 32, offset: 136, set: gpr, encoding: flags, format: hexadecimal, numbers: { gdb: 17, lldb: 17, dwarf: 49, ehframe: 49 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: i386_eflags }
+  - { id: 18, name: cs, alternate: null, role: null, bits: 32, offset: 140, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 18, lldb: 18, dwarf: 51, ehframe: 51 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int32 }
+  - { id: 19, name: ss, alternate: null, role: null, bits: 32, offset: 144, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 19, lldb: 19, dwarf: 52, ehframe: 52 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int32 }
+  - { id: 20, name: ds, alternate: null, role: null, bits: 32, offset: 148, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 20, lldb: 20, dwarf: 53, ehframe: 53 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int32 }
+  - { id: 21, name: es, alternate: null, role: null, bits: 32, offset: 152, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 21, lldb: 21, dwarf: 50, ehframe: 50 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int32 }
+  - { id: 22, name: fs, alternate: null, role: null, bits: 32, offset: 156, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 22, lldb: 22, dwarf: 54, ehframe: 54 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int32 }
+  - { id: 23, name: gs, alternate: null, role: null, bits: 32, offset: 160, set: gpr, encoding: unsigned, format: hexadecimal, numbers: { gdb: 23, lldb: 23, dwarf: 55, ehframe: 55 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.core, type: int32 }
+  - { id: 24, name: st0, alternate: null, role: null, bits: 80, offset: 164, set: fpu, encoding: ieee, format: float, numbers: { gdb: 24, lldb: 24, dwarf: 33, ehframe: 33 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: i387_ext }
+  - { id: 25, name: st1, alternate: null, role: null, bits: 80, offset: 174, set: fpu, encoding: ieee, format: float, numbers: { gdb: 25, lldb: 25, dwarf: 34, ehframe: 34 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: i387_ext }
+  - { id: 26, name: st2, alternate: null, role: null, bits: 80, offset: 184, set: fpu, encoding: ieee, format: float, numbers: { gdb: 26, lldb: 26, dwarf: 35, ehframe: 35 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: i387_ext }
+  - { id: 27, name: st3, alternate: null, role: null, bits: 80, offset: 194, set: fpu, encoding: ieee, format: float, numbers: { gdb: 27, lldb: 27, dwarf: 36, ehframe: 36 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: i387_ext }
+  - { id: 28, name: st4, alternate: null, role: null, bits: 80, offset: 204, set: fpu, encoding: ieee, format: float, numbers: { gdb: 28, lldb: 28, dwarf: 37, ehframe: 37 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: i387_ext }
+  - { id: 29, name: st5, alternate: null, role: null, bits: 80, offset: 214, set: fpu, encoding: ieee, format: float, numbers: { gdb: 29, lldb: 29, dwarf: 38, ehframe: 38 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: i387_ext }
+  - { id: 30, name: st6, alternate: null, role: null, bits: 80, offset: 224, set: fpu, encoding: ieee, format: float, numbers: { gdb: 30, lldb: 30, dwarf: 39, ehframe: 39 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: i387_ext }
+  - { id: 31, name: st7, alternate: null, role: null, bits: 80, offset: 234, set: fpu, encoding: ieee, format: float, numbers: { gdb: 31, lldb: 31, dwarf: 40, ehframe: 40 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: i387_ext }
+  - { id: 32, name: fctrl, alternate: null, role: null, bits: 32, offset: 244, set: fpu, encoding: flags, format: hexadecimal, numbers: { gdb: 32, lldb: 32, dwarf: null, ehframe: null }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: int32 }
+  - { id: 33, name: fstat, alternate: null, role: null, bits: 32, offset: 248, set: fpu, encoding: flags, format: hexadecimal, numbers: { gdb: 33, lldb: 33, dwarf: null, ehframe: null }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: int32 }
+  - { id: 34, name: ftag, alternate: null, role: null, bits: 32, offset: 252, set: fpu, encoding: flags, format: hexadecimal, numbers: { gdb: 34, lldb: 34, dwarf: null, ehframe: null }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: int32 }
+  - { id: 35, name: fiseg, alternate: null, role: null, bits: 32, offset: 256, set: fpu, encoding: unsigned, format: hexadecimal, numbers: { gdb: 35, lldb: 35, dwarf: null, ehframe: null }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: int32 }
+  - { id: 36, name: fioff, alternate: null, role: null, bits: 32, offset: 260, set: fpu, encoding: unsigned, format: hexadecimal, numbers: { gdb: 36, lldb: 36, dwarf: null, ehframe: null }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: int32 }
+  - { id: 37, name: foseg, alternate: null, role: null, bits: 32, offset: 264, set: fpu, encoding: unsigned, format: hexadecimal, numbers: { gdb: 37, lldb: 37, dwarf: null, ehframe: null }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: int32 }
+  - { id: 38, name: fooff, alternate: null, role: null, bits: 32, offset: 268, set: fpu, encoding: unsigned, format: hexadecimal, numbers: { gdb: 38, lldb: 38, dwarf: null, ehframe: null }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: int32 }
+  - { id: 39, name: fop, alternate: null, role: null, bits: 32, offset: 272, set: fpu, encoding: unsigned, format: hexadecimal, numbers: { gdb: 39, lldb: 39, dwarf: null, ehframe: null }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.387, type: int32 }
+  - { id: 40, name: xmm0, alternate: null, role: null, bits: 128, offset: 276, set: simd, encoding: vector, format: vector, numbers: { gdb: 40, lldb: 40, dwarf: 17, ehframe: 17 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 41, name: xmm1, alternate: null, role: null, bits: 128, offset: 292, set: simd, encoding: vector, format: vector, numbers: { gdb: 41, lldb: 41, dwarf: 18, ehframe: 18 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 42, name: xmm2, alternate: null, role: null, bits: 128, offset: 308, set: simd, encoding: vector, format: vector, numbers: { gdb: 42, lldb: 42, dwarf: 19, ehframe: 19 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 43, name: xmm3, alternate: null, role: null, bits: 128, offset: 324, set: simd, encoding: vector, format: vector, numbers: { gdb: 43, lldb: 43, dwarf: 20, ehframe: 20 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 44, name: xmm4, alternate: null, role: null, bits: 128, offset: 340, set: simd, encoding: vector, format: vector, numbers: { gdb: 44, lldb: 44, dwarf: 21, ehframe: 21 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 45, name: xmm5, alternate: null, role: null, bits: 128, offset: 356, set: simd, encoding: vector, format: vector, numbers: { gdb: 45, lldb: 45, dwarf: 22, ehframe: 22 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 46, name: xmm6, alternate: null, role: null, bits: 128, offset: 372, set: simd, encoding: vector, format: vector, numbers: { gdb: 46, lldb: 46, dwarf: 23, ehframe: 23 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 47, name: xmm7, alternate: null, role: null, bits: 128, offset: 388, set: simd, encoding: vector, format: vector, numbers: { gdb: 47, lldb: 47, dwarf: 24, ehframe: 24 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 48, name: xmm8, alternate: null, role: null, bits: 128, offset: 404, set: simd, encoding: vector, format: vector, numbers: { gdb: 48, lldb: 48, dwarf: 25, ehframe: 25 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 49, name: xmm9, alternate: null, role: null, bits: 128, offset: 420, set: simd, encoding: vector, format: vector, numbers: { gdb: 49, lldb: 49, dwarf: 26, ehframe: 26 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 50, name: xmm10, alternate: null, role: null, bits: 128, offset: 436, set: simd, encoding: vector, format: vector, numbers: { gdb: 50, lldb: 50, dwarf: 27, ehframe: 27 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 51, name: xmm11, alternate: null, role: null, bits: 128, offset: 452, set: simd, encoding: vector, format: vector, numbers: { gdb: 51, lldb: 51, dwarf: 28, ehframe: 28 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 52, name: xmm12, alternate: null, role: null, bits: 128, offset: 468, set: simd, encoding: vector, format: vector, numbers: { gdb: 52, lldb: 52, dwarf: 29, ehframe: 29 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 53, name: xmm13, alternate: null, role: null, bits: 128, offset: 484, set: simd, encoding: vector, format: vector, numbers: { gdb: 53, lldb: 53, dwarf: 30, ehframe: 30 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 54, name: xmm14, alternate: null, role: null, bits: 128, offset: 500, set: simd, encoding: vector, format: vector, numbers: { gdb: 54, lldb: 54, dwarf: 31, ehframe: 31 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 55, name: xmm15, alternate: null, role: null, bits: 128, offset: 516, set: simd, encoding: vector, format: vector, numbers: { gdb: 55, lldb: 55, dwarf: 32, ehframe: 32 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: vec128 }
+  - { id: 56, name: mxcsr, alternate: null, role: null, bits: 32, offset: 532, set: simd, encoding: flags, format: hexadecimal, numbers: { gdb: 56, lldb: 56, dwarf: 64, ehframe: 64 }, relations: { containers: [], invalidates: [] }, feature: org.gnu.gdb.i386.sse, type: i386_mxcsr }

@@ -1,0 +1,135 @@
+- { pattern: "\u0003", leaf: interrupt }
+- { pattern: "!", leaf: extended, compatibility: gdb }
+- { pattern: "?", leaf: stop }
+- { pattern: A, leaf: arguments, exact: false }
+- { pattern: B, leaf: breakpoint, exact: false, compatibility: gdb }
+- { pattern: C, leaf: C, exact: false }
+- { pattern: D, leaf: detach, exact: false }
+- { pattern: G, leaf: G, exact: false }
+- { pattern: H, leaf: H, exact: false }
+- { pattern: I, leaf: input, exact: false, compatibility: lldb }
+- { pattern: "MultiMemRead:ranges:", leaf: MultiMemRead, exact: false, compatibility: lldb, response: binary }
+- { pattern: M, leaf: M, exact: false }
+- { pattern: P, leaf: P, exact: false }
+- { pattern: "QDisableASLR:", leaf: aslr, exact: false, scope: session }
+- { pattern: "QDisableRandomization:", leaf: aslr, exact: false, compatibility: gdb, scope: session }
+- { pattern: "QCatchSyscalls:", leaf: QCatchSyscalls, exact: false, compatibility: gdb }
+- { pattern: "QEnvironmentHexEncoded:", leaf: environment, exact: false, scope: session }
+- { pattern: QEnvironmentReset, leaf: QEnvironmentReset, compatibility: gdb, scope: session }
+- { pattern: "QEnvironmentUnset:", leaf: QEnvironmentUnset, exact: false, compatibility: gdb, scope: session }
+- { pattern: "QEnvironment:", leaf: raw, exact: false }
+- { pattern: QEnableErrorStrings, leaf: QEnableErrorStrings, scope: remote }
+- { pattern: QListThreadsInStopReply, leaf: QListThreadsInStopReply, feature: stopthreads }
+- { pattern: "QLaunchArch:", leaf: QLaunchArch, exact: false, compatibility: lldb }
+- { pattern: "QNonStop:", leaf: QNonStop, exact: false }
+- { pattern: "QPassSignals:", leaf: QPassSignals, exact: false }
+- { pattern: "QProgramSignals:", leaf: QProgramSignals, exact: false }
+- { pattern: "QRestoreRegisterState:", leaf: QRestoreRegisterState, exact: false }
+- { pattern: QSaveRegisterState, leaf: QSaveRegisterState, exact: false }
+- { pattern: "QSetDisableASLR:", leaf: aslr, exact: false, scope: session }
+- { pattern: "QSetMaxPacketSize:", leaf: QSetMaxPacketSize, exact: false, scope: remote }
+- { pattern: "QSetMaxPayloadSize:", leaf: QSetMaxPayloadSize, exact: false, scope: remote }
+- { pattern: "QSetDetachOnError:", leaf: QSetDetachOnError, exact: false, scope: session }
+- { pattern: "QSetIgnoredExceptions:", leaf: QSetIgnoredExceptions, exact: false, compatibility: lldb }
+- { pattern: "QSetSTDERR:", leaf: stderr, exact: false, scope: session }
+- { pattern: "QSetSTDIN:", leaf: stdin, exact: false, scope: session }
+- { pattern: "QSetSTDOUT:", leaf: stdout, exact: false, scope: session }
+- { pattern: "QSetSTDIOWindowSize:", leaf: QSetSTDIOWindowSize, exact: false, scope: session }
+- { pattern: "QSetWorkingDir:", leaf: QSetWorkingDir, exact: false, scope: session }
+- { pattern: QStartNoAckMode, leaf: QStartNoAckMode, scope: remote }
+- { pattern: QSyncThreadState, leaf: QSyncThreadState }
+- { pattern: QThreadSuffixSupported, leaf: QThreadSuffixSupported, feature: threadsuffix }
+- { pattern: "QThreadEvents:", leaf: QThreadEvents, exact: false, compatibility: gdb }
+- { pattern: QThreadOptions, leaf: QThreadOptions, exact: false, compatibility: gdb }
+- { pattern: S, leaf: S, exact: false }
+- { pattern: T, leaf: alive, exact: false }
+- { pattern: X, leaf: X, exact: false, request: binary }
+- { pattern: Z, leaf: Z, exact: false }
+- { pattern: _M, leaf: allocate, exact: false }
+- { pattern: _m, leaf: deallocate, exact: false }
+- { pattern: b, leaf: baud, exact: false, compatibility: gdb }
+- { pattern: c, leaf: resume, exact: false }
+- { pattern: d, leaf: debug, compatibility: gdb }
+- { pattern: g, leaf: g }
+- { pattern: jGetDyldProcessState, leaf: loader, compatibility: lldb, response: binary }
+- { pattern: "jGetLoadedDynamicLibrariesInfos:", leaf: libraries, exact: false, request: binary, response: binary }
+- { pattern: "jGetSharedCacheInfo:", leaf: cache, exact: false, response: binary }
+- { pattern: "jModulesInfo:", leaf: modules, exact: false, scope: session, request: binary, response: binary }
+- { pattern: jSignalsInfo, leaf: jSignalsInfo, scope: remote }
+- { pattern: "jMultiBreakpoint:", leaf: jMultiBreakpoint, exact: false, request: binary, response: binary }
+- { pattern: jThreadExtendedInfo, leaf: context, exact: false, compatibility: lldb, request: binary, response: binary }
+- { pattern: jThreadsInfo, leaf: threads, response: binary }
+- { pattern: k, leaf: kill }
+- { pattern: m, leaf: m, exact: false }
+- { pattern: p, leaf: p, exact: false }
+- { pattern: qAttached, leaf: attached, exact: false }
+- { pattern: qC, leaf: qC }
+- { pattern: "qEcho:", leaf: qEcho, exact: false, compatibility: lldb }
+- { pattern: "qFileLoadAddress:", leaf: qFileLoadAddress, exact: false }
+- { pattern: qGDBServerVersion, leaf: version, scope: remote }
+- { pattern: qGetGDBServerVersion, leaf: version, scope: remote }
+- { pattern: qGetPid, leaf: qGetPid, compatibility: lldb }
+- { pattern: "qGetTLSAddr:", leaf: tls, exact: false }
+- { pattern: "qGetTIBAddr:", leaf: tib, exact: false, compatibility: gdb }
+- { pattern: qGetWorkingDir, leaf: qGetWorkingDir, scope: session }
+- { pattern: "qGroupName:", leaf: qGroupName, exact: false }
+- { pattern: qHostInfo, leaf: host, scope: remote }
+- { pattern: "qKillSpawnedProcess:", leaf: qKillSpawnedProcess, exact: false }
+- { pattern: qLaunchGDBServer, leaf: qLaunchGDBServer, exact: false }
+- { pattern: qLaunchSuccess, leaf: qLaunchSuccess }
+- { pattern: qMemoryRegionInfoSupported, leaf: qMemoryRegionInfoSupported }
+- { pattern: qMemoryRegionInfo, leaf: qMemoryRegionInfo }
+- { pattern: "qMemoryRegionInfo:", leaf: qMemoryRegionInfo, exact: false }
+- { pattern: "qModuleInfo:", leaf: module, exact: false, compatibility: lldb, scope: session }
+- { pattern: qOffsets, leaf: qOffsets, compatibility: gdb }
+- { pattern: "qPathComplete:", leaf: qPathComplete, exact: false }
+- { pattern: "qPlatform_mkdir:", leaf: qPlatform_mkdir, exact: false }
+- { pattern: "qPlatform_chmod:", leaf: qPlatform_chmod, exact: false }
+- { pattern: "qPlatform_shell:", leaf: qPlatform_shell, exact: false }
+- { pattern: qProcessInfo, leaf: qProcessInfo }
+- { pattern: "qProcessInfoPID:", leaf: process, exact: false, scope: remote }
+- { pattern: qQueryGDBServer, leaf: qQueryGDBServer }
+- { pattern: qRegisterInfo, leaf: qRegisterInfo, exact: false }
+- { pattern: qSaveCore, leaf: qLLDBSaveCore, exact: false, compatibility: lldb }
+- { pattern: "qRcmd,", leaf: qRcmd, exact: false, compatibility: gdb }
+- { pattern: "qSearch:memory:", leaf: qSearch, exact: false, compatibility: gdb }
+- { pattern: qShlibInfoAddr, leaf: qShlibInfoAddr, compatibility: lldb }
+- { pattern: qStepPacketSupported, leaf: qStepPacketSupported }
+- { pattern: "qSpeedTest:", leaf: qSpeedTest, exact: false, compatibility: lldb }
+- { pattern: qSupported, leaf: supported, exact: false, scope: remote }
+- { pattern: "qSupportsDetachAndStayStopped:", leaf: qSupportsDetachAndStayStopped, compatibility: lldb }
+- { pattern: qSyncThreadStateSupported, leaf: qSyncThreadStateSupported, compatibility: lldb }
+- { pattern: qSymbol, leaf: symbol, exact: false, scope: remote }
+- { pattern: "qThreadExtraInfo,", leaf: qThreadExtraInfo, exact: false }
+- { pattern: qThreadStopInfo, leaf: qThreadStopInfo, exact: false }
+- { pattern: "qUserName:", leaf: qUserName, exact: false }
+- { pattern: qVAttachOrWaitSupported, leaf: qVAttachOrWaitSupported, compatibility: lldb }
+- { pattern: qWatchpointSupportInfo, leaf: qWatchpointSupportInfo, compatibility: lldb }
+- { pattern: "qWatchpointSupportInfo:", leaf: qWatchpointSupportInfo, exact: false }
+- { pattern: "qXfer:auxv:", leaf: transfer.auxiliary, exact: false, response: binary }
+- { pattern: "qXfer:exec-file:", leaf: transfer.executable, exact: false, response: binary }
+- { pattern: "qXfer:features:", leaf: transfer.features, exact: false, response: binary }
+- { pattern: "qXfer:libraries:", leaf: transfer.libraries, exact: false, response: binary }
+- { pattern: "qXfer:libraries-svr4:", leaf: transfer.svr4, exact: false, response: binary }
+- { pattern: "qXfer:memory-map:", leaf: transfer.map, exact: false, response: binary }
+- { pattern: "qXfer:osdata:", leaf: transfer.osdata, exact: false, response: binary }
+- { pattern: "qXfer:siginfo:", leaf: transfer.signal, exact: false, response: binary }
+- { pattern: "qXfer:threads:", leaf: transfer.threads, exact: false, response: binary }
+- { pattern: qfProcessInfo, leaf: qfProcessInfo, exact: false, scope: remote }
+- { pattern: qfThreadInfo, leaf: qfThreadInfo }
+- { pattern: qsProcessInfo, leaf: qsProcessInfo, scope: remote }
+- { pattern: qsThreadInfo, leaf: qsThreadInfo }
+- { pattern: s, leaf: step, exact: false }
+- { pattern: vAttach;, leaf: attach, exact: false }
+- { pattern: vAttachName;, leaf: vAttachName, exact: false }
+- { pattern: vAttachOrWait;, leaf: vAttachOrWait, exact: false }
+- { pattern: vAttachWait;, leaf: vAttachWait, exact: false }
+- { pattern: vCont, leaf: vCont, exact: false }
+- { pattern: vCtrlC, leaf: vCtrlC }
+- { pattern: "vFile:", leaf: file, exact: false, scope: session, request: binary, response: binary }
+- { pattern: vKill, leaf: vKill, exact: false }
+- { pattern: vRun, leaf: run, exact: false }
+- { pattern: vStdio, leaf: vStdio }
+- { pattern: vStopped, leaf: vStopped }
+- { pattern: x, leaf: x, exact: false, response: binary }
+- { pattern: z, leaf: z, exact: false }
