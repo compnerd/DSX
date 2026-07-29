@@ -1,0 +1,32 @@
+diff --git a/lldb/test/API/lang/objc/modules-auto-import/TestModulesAutoImport.py b/lldb/test/API/lang/objc/modules-auto-import/TestModulesAutoImport.py
+--- a/lldb/test/API/lang/objc/modules-auto-import/TestModulesAutoImport.py
++++ b/lldb/test/API/lang/objc/modules-auto-import/TestModulesAutoImport.py
+@@ -1,10 +1,12 @@
+ """Test that importing modules in Objective-C works as expected."""
+ 
+ import lldb
++from pathlib import Path
+ 
+ from lldbsuite.test.decorators import *
++from lldbsuite.test.decorators import _compiler_supports
+ from lldbsuite.test.lldbtest import *
+-from lldbsuite.test import lldbutil
++from lldbsuite.test import configuration, lldbutil
+ 
+ 
+ class ObjCModulesAutoImportTestCase(TestBase):
+@@ -24,7 +26,13 @@
+     @skipIf(macos_version=["<", "10.12"])
+     @skipIf(compiler="clang", compiler_version=["<", "20.0"])
+     def test_expr_no_sysroot(self):
+-        self.build(dictionary={"TEST_EXTRA_FLAGS": f"-fno-debug-record-sysroot"})
++        flag = "-fno-debug-record-sysroot"
++        compiler = self.getCompiler()
++        if not _compiler_supports(compiler, flag):
++            # Apple and upstream Clang do not share version/feature numbering.
++            # Use the compiler built with LLDB for this newer debug-info flag.
++            compiler = str(Path(configuration.llvm_tools_dir) / "clang")
++        self.build(dictionary={"CC": compiler, "TEST_EXTRA_FLAGS": flag})
+         lldbutil.run_to_source_breakpoint(
+             self, "// break here", lldb.SBFileSpec("main.m", False)
+         )

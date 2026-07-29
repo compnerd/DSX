@@ -1,0 +1,43 @@
+diff --git a/lldb/test/API/functionalities/load_unload/TestLoadUnload.py b/lldb/test/API/functionalities/load_unload/TestLoadUnload.py
+index b0290a32..b1077718 100644
+--- a/lldb/test/API/functionalities/load_unload/TestLoadUnload.py
++++ b/lldb/test/API/functionalities/load_unload/TestLoadUnload.py
+@@ -48,15 +48,9 @@ class LoadUnloadTestCase(TestBase):
+         Does nothing in case of non-remote platforms.
+         """
+         if lldb.remote_platform:
+-            ext = "so"
+-            if self.platformIsDarwin():
+-                ext = "dylib"
+-
+             shlibs = [
+-                "libloadunload_a." + ext,
+-                "libloadunload_b." + ext,
+-                "libloadunload_c." + ext,
+-                "libloadunload_d." + ext,
++                self.platformContext.getFullLibName("loadunload_" + suffix)
++                for suffix in ("a", "b", "c", "d")
+             ]
+             wd = lldb.remote_platform.GetWorkingDirectory()
+             cwd = os.getcwd()
+@@ -70,16 +64,17 @@ class LoadUnloadTestCase(TestBase):
+                         "Unable copy '%s' to '%s'.\n>>> %s" % (f, wd, err.GetCString())
+                     )
+             if hidden_dir:
+-                shlib = "libloadunload_d." + ext
+-                hidden_dir = os.path.join(wd, "hidden")
++                shlib = self.platformContext.getFullLibName("loadunload_d")
++                hidden_dir = lldbutil.join_remote_paths(wd, "hidden")
+                 hidden_file = lldbutil.join_remote_paths(hidden_dir, shlib)
+                 err = lldb.remote_platform.MakeDirectory(hidden_dir)
+                 if err.Fail():
+                     raise RuntimeError(
+                         "Unable to create a directory '%s'." % hidden_dir
+                     )
++                local_file = os.path.join("hidden", shlib)
+                 err = lldb.remote_platform.Put(
+-                    lldb.SBFileSpec(os.path.join("hidden", shlib)),
++                    lldb.SBFileSpec(self.getBuildArtifact(local_file)),
+                     lldb.SBFileSpec(hidden_file),
+                 )
+                 if err.Fail():

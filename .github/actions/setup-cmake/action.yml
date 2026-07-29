@@ -1,0 +1,52 @@
+name: Install CMake
+description: Use the runner's CMake or install the selected Kitware release
+
+runs:
+  using: composite
+  steps:
+    - shell: pwsh
+      run: |
+        $version = (Get-Content .github/matrix.json | ConvertFrom-Json).cmake
+        $installed = Get-Command cmake -ErrorAction SilentlyContinue
+        if ($installed) {
+          $information = & $installed.Source -E capabilities | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ([version]$information.version.string -ge [version]$version) {
+            & $installed.Source --version
+            exit $LASTEXITCODE
+          }
+        }
+        $platform = if ($IsMacOS) {
+          "macos-universal"
+        } elseif ($IsWindows) {
+          $architecture = $env:RUNNER_ARCH -eq "ARM64" ? "arm64" : "x86_64"
+          "windows-$architecture"
+        } else {
+          $architecture = $env:RUNNER_ARCH -eq "ARM64" ? "aarch64" : "x86_64"
+          "linux-$architecture"
+        }
+        $extension = $IsWindows ? "zip" : "tar.gz"
+        $name = "cmake-$version-$platform"
+        $root = [IO.Path]::Join($env:RUNNER_TEMP, "cmake")
+        New-Item -ItemType Directory -Force $root | Out-Null
+        $base = "https://github.com/Kitware/CMake/releases/download/v$version"
+        $archive = [IO.Path]::Join($root, "$name.$extension")
+        Invoke-WebRequest "$base/$name.$extension" -OutFile $archive
+        $checksums = [IO.Path]::Join($root, "SHA-256.txt")
+        Invoke-WebRequest "$base/cmake-$version-SHA-256.txt" -OutFile $checksums
+        $record = @(Get-Content $checksums | Where-Object {
+          $_.Trim().EndsWith("$name.$extension")
+        })
+        if ($record.Count -ne 1 -or
+            (Get-FileHash $archive).Hash -ne ($record[0] -split '\s+')[0]) {
+          throw "CMake archive checksum mismatch"
+        }
+        if ($IsWindows) {
+          Expand-Archive $archive -DestinationPath $root
+        } else {
+          tar -xzf $archive -C $root
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        $suffix = $IsMacOS ? "CMake.app/Contents/bin" : "bin"
+        [IO.Path]::Join($root, $name, $suffix) |
+            Out-File $env:GITHUB_PATH -Append -Encoding utf8

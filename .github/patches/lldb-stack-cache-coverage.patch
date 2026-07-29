@@ -1,0 +1,34 @@
+diff --git a/lldb/test/API/macosx/expedited-stack-memory/TestExpeditedStackMemory.py b/lldb/test/API/macosx/expedited-stack-memory/TestExpeditedStackMemory.py
+--- a/lldb/test/API/macosx/expedited-stack-memory/TestExpeditedStackMemory.py
++++ b/lldb/test/API/macosx/expedited-stack-memory/TestExpeditedStackMemory.py
+@@ -89,5 +89,12 @@
+             # asks to view all frames.
+             if examine_all_frames or idx == 0:
+-                self.examine_locals(frame)
++                self.examine_locals(frame)
++                name = frame.GetFunctionName()
++                if name in ("func_e", "func_d"):
++                    value = frame.FindVariable("stats").GetChildMemberWithName("sum")
++                    self.assertTrue(value.IsValid())
++                    self.assertEqual(
++                        value.GetValueAsSigned(-1), 1 if name == "func_e" else 0
++                    )
+ 
+         sent = self.walk_stack(per_frame, disable_memory_cache=False)
+@@ -146,13 +153,7 @@
+         )
+ 
+-        if expect_stack_reads:
+-            # Deeper frames' stacks are not expedited.
+-            self.assertGreater(
+-                len(stack_reads),
+-                0,
+-                "expected stack memory reads while examining deeper frames' "
+-                "stack-resident locals.\n" + breakdown,
+-            )
+-        else:
++        # A stub may expedite more than the stopped frame. Additional cached
++        # bytes must not impose a minimum read count for deeper frames.
++        if not expect_stack_reads:
+             # The stopped frame's stack is expedited.
+             self.assertEqual(

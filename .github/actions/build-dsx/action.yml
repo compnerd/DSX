@@ -1,0 +1,134 @@
+name: Build DSX
+description: Build and test DSX with CMake, Ninja, and compiler caching
+
+inputs:
+  scratch-path:
+    description: CMake build directory
+    required: true
+  configuration:
+    description: debug or release
+    required: true
+  sdk:
+    description: Target SDK family
+    required: true
+  target:
+    description: Target triple
+    required: true
+  test:
+    description: Run the DSX tests with CTest
+    default: 'false'
+
+outputs:
+  bin:
+    description: Product directory
+    value: ${{ steps.build.outputs.bin }}
+
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-cmake
+    - id: build
+      shell: pwsh
+      env:
+        SCRATCH_PATH: ${{ inputs.scratch-path }}
+        CONFIGURATION: ${{ inputs.configuration }}
+        SDK: ${{ inputs.sdk }}
+        TARGET: ${{ inputs.target }}
+        TEST: ${{ inputs.test }}
+      run: |
+        $scratch = [IO.Path]::GetFullPath($env:SCRATCH_PATH)
+        $tools = Split-Path (Get-Command swift).Source
+        if ($IsMacOS) {
+          $information = & swift -print-target-info | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tools = [IO.Path]::GetFullPath(
+              "$($information.paths.runtimeResourcePath)/../../bin")
+        }
+        $env:CC = [IO.Path]::Join($tools, $IsWindows ? "clang.exe" : "clang")
+        $env:CXX =
+            [IO.Path]::Join($tools, $IsWindows ? "clang++.exe" : "clang++")
+        $env:SWIFTC =
+            [IO.Path]::Join($tools, $IsWindows ? "swiftc.exe" : "swiftc")
+        if ($IsWindows) {
+          # Swift's archive driver looks up link.exe (it invokes /LIB).
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/" +
+              "Installer/vswhere.exe"
+          $installation = & $vswhere -latest -products '*' `
+              -property installationPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $vc = "$installation/VC"
+          $versionfile =
+              "$vc/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt"
+          $version = (Get-Content $versionfile).Trim()
+          $hostarch = $env:RUNNER_ARCH.ToLowerInvariant()
+          $env:SWIFT_DRIVER_LINK_EXEC = [IO.Path]::GetFullPath(
+              "$vc/Tools/MSVC/$version/bin/Host$hostarch/$hostarch/link.exe")
+        }
+        $env:LLVM_CACHE_PREFIX_MAPS = "${{ github.workspace }}=/^workspace"
+        $env:LLVM_CACHE_BUILD_SESSION_ID = "${{ github.run_id }}-dsx"
+        if ($IsWindows) { Remove-Item Env:LLVM_CACHE_BUILD_SESSION_ID }
+        $configuration = switch -CaseSensitive ($env:CONFIGURATION) {
+          "debug" { "Debug" }
+          "release" { "Release" }
+          default { throw "Configuration must be debug or release" }
+        }
+        $launcher = [IO.Path]::Join($tools,
+            $IsWindows ? "clang-cache.exe" : "clang-cache")
+        $flags = "-explicit-module-build -cache-compile-job " +
+            "-cas-path `"$env:SWIFT_CAS_PATH`""
+        $arguments = @("-G", "Ninja", "--toolchain",
+          "${{ github.workspace }}/cmake/toolchains/Swift.cmake",
+          "-DCMAKE_C_COMPILER_LAUNCHER:FILEPATH=$launcher",
+          "-DCMAKE_CXX_COMPILER_LAUNCHER:FILEPATH=$launcher",
+          "-DCMAKE_Swift_FLAGS_INIT=$flags")
+        if ($env:SDK -eq "android" -or $env:TARGET -like "i686-*-windows-*") {
+          $hostbuild = "$scratch-host"
+          cmake -S Sources/DSXCodeGen @arguments -B $hostbuild `
+              -DCMAKE_BUILD_TYPE=Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build $hostbuild --parallel --target DSXCodeGen
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $name = $IsWindows ? "DSXCodeGen.exe" : "DSXCodeGen"
+          $generator = [IO.Path]::Join($hostbuild, "bin", $name)
+          $arguments += "-DDSX_CODEGEN_EXECUTABLE=$generator"
+        }
+        $arguments += @("-B", $scratch, "-DCMAKE_BUILD_TYPE=$configuration",
+          "-DDSX_TARGET_TRIPLE=$env:TARGET", "-DBUILD_TESTING=$env:TEST")
+        if ($IsMacOS -and $configuration -eq "Debug") {
+          # Swift's implicit dsymutil job does not forward the CAS location.
+          # Disable it only at link time and generate the dSYMs below.
+          $arguments += "-DCMAKE_Swift_LINK_FLAGS_DEBUG=-gnone"
+        }
+        if ($env:SDK -eq "android") {
+          if ($IsWindows -and $env:TARGET -like "x86_64-*") {
+            # Swift 6.4's Windows clang-cache asserts in IncludeTree while
+            # compiling Android x64 Crypto C++. Keep C and Swift caching.
+            $arguments += "-DCMAKE_CXX_COMPILER_LAUNCHER:FILEPATH="
+          }
+          $metadata = [IO.Path]::Join($env:ANDROID_SWIFT_SDKS_PATH,
+              "android.artifactbundle", "android", "swift-sdk.json")
+          $arguments += "-DDSX_ANDROID_SDK_JSON=$metadata"
+        }
+        cmake -S . @arguments
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cmake --build $scratch --parallel
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $bin = [IO.Path]::Join($scratch, "bin")
+        if ($IsMacOS -and $configuration -eq "Debug") {
+          $dsymutil = [IO.Path]::Join($tools, "dsymutil")
+          Get-ChildItem $bin -File | Where-Object {
+            $_.Extension -eq "" -or $_.Extension -eq ".dylib"
+          } | ForEach-Object {
+            & $dsymutil -cas $env:SWIFT_CAS_PATH $_.FullName `
+                -o "$($_.FullName).dSYM"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+        }
+        if ($env:TEST -eq "true") {
+          ctest --test-dir $scratch --output-on-failure --no-tests=error
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        if ($env:TARGET -like "*-windows-*") {
+          Copy-Item ([IO.Path]::Join($scratch, "lib", "DSX.lib")) $bin
+        }
+        "bin=$bin" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8

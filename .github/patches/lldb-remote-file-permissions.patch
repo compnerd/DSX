@@ -1,0 +1,74 @@
+diff --git a/lldb/test/API/tools/lldb-server/TestGdbRemotePlatformFile.py b/lldb/test/API/tools/lldb-server/TestGdbRemotePlatformFile.py
+index 4bfd816a..5e1f41dd 100644
+--- a/lldb/test/API/tools/lldb-server/TestGdbRemotePlatformFile.py
++++ b/lldb/test/API/tools/lldb-server/TestGdbRemotePlatformFile.py
+@@ -9,6 +9,7 @@ from gdbremote_testcase import GdbRemoteTestCaseBase
+ 
+ import binascii
+ import os
++import shlex
+ import stat
+ import struct
+ import typing
+@@ -45,6 +46,15 @@ def uint32_trunc(x):
+ class TestGdbRemotePlatformFile(GdbRemoteTestCaseBase):
+     SHARED_BUILD_TESTCASE = False
+ 
++    def set_remote_mode(self, path, mode):
++        if lldb.remote_platform:
++            command = lldb.SBPlatformShellCommand(
++                f"chmod {mode:o} {shlex.quote(path)}"
++            )
++            error = lldb.remote_platform.Run(command)
++            self.assertTrue(error.Success(), str(error))
++            self.assertEqual(command.GetStatus(), 0, command.GetOutput())
++
+     @skipIfWindows
+     @add_test_categories(["llgs"])
+     def test_platform_file_rdonly(self):
+@@ -177,6 +187,7 @@ class TestGdbRemotePlatformFile(GdbRemoteTestCaseBase):
+             else:
+                 os.chmod(temp_file.fileno(), test_mode)
+         temp_path = lldbutil.install_to_target(self, temp_path)
++        self.set_remote_mode(temp_path, test_mode)
+ 
+         self.do_handshake()
+         self.test_sequence.add_log_lines(
+@@ -267,6 +278,8 @@ class TestGdbRemotePlatformFile(GdbRemoteTestCaseBase):
+             temp_file.write(b"some test data for stat")
+             temp_file.flush()
+             temp_path = lldbutil.install_to_target(self, temp_file.name)
++            mode = stat.S_IMODE(os.fstat(temp_file.fileno()).st_mode)
++            self.set_remote_mode(temp_path, mode)
+ 
+             self.do_handshake()
+             self.test_sequence.add_log_lines(
+@@ -474,6 +487,18 @@ class TestGdbRemotePlatformFile(GdbRemoteTestCaseBase):
+         if write:
+             # check if the data was actually written
+             if lldb.remote_platform:
++                if creat:
++                    # Check the target mode before a download can change it.
++                    self.reset_test_sequence()
++                    self.test_sequence.add_log_lines(
++                        [
++                            "read packet: $vFile:mode:%s#00"
++                            % binascii.b2a_hex(temp_path.encode()).decode(),
++                            "send packet: $F1a0#00",
++                        ],
++                        True,
++                    )
++                    self.expect_gdbremote_sequence()
+                 local_path = self.getBuildArtifact("file_from_target")
+                 error = lldb.remote_platform.Get(
+                     lldb.SBFileSpec(temp_path, False), lldb.SBFileSpec(local_path, True)
+@@ -485,7 +510,8 @@ class TestGdbRemotePlatformFile(GdbRemoteTestCaseBase):
+                 temp_path = local_path
+ 
+             with open(temp_path, "rb") as temp_file:
+-                if creat and lldbplatformutil.getHostPlatform() != "windows":
++                if (creat and not lldb.remote_platform
++                        and lldbplatformutil.getHostPlatform() != "windows"):
+                     self.assertEqual(
+                         os.fstat(temp_file.fileno()).st_mode & 0o7777, 0o640
+                     )

@@ -1,0 +1,24 @@
+diff --git a/lldb/test/API/commands/expression/int128/Test128BitsInteger.py b/lldb/test/API/commands/expression/int128/Test128BitsInteger.py
+--- a/lldb/test/API/commands/expression/int128/Test128BitsInteger.py
++++ b/lldb/test/API/commands/expression/int128/Test128BitsInteger.py
+@@ -2,5 +2,5 @@
+ from lldbsuite.test import decorators
+ 
+ lldbinline.MakeInlineTest(
+-    __file__, globals(), decorators.skipIf(archs=["arm$", "armv7k", "i386"])
++    __file__, globals(), decorators.skipIf(archs=["arm$", "armv7k", "i[3-6]86$"])
+ )
+diff --git a/lldb/test/API/lang/cpp/const_static_integral_member_int128/TestConstStaticIntegralMemberInt128.py b/lldb/test/API/lang/cpp/const_static_integral_member_int128/TestConstStaticIntegralMemberInt128.py
+--- a/lldb/test/API/lang/cpp/const_static_integral_member_int128/TestConstStaticIntegralMemberInt128.py
++++ b/lldb/test/API/lang/cpp/const_static_integral_member_int128/TestConstStaticIntegralMemberInt128.py
+@@ -12,8 +12,8 @@
+ 
+ @requireExpressionEvaluation
+ class TestCase(TestBase):
+-    # int128 is not available on 32-bit ARM.
+-    @skipIf(archs=["arm$"])
++    # Clang does not provide int128 on 32-bit ARM or x86.
++    @skipIf(archs=["arm$", "i[3-6]86$"])
+     def test_int128(self):
+         self.build()
+         lldbutil.run_to_source_breakpoint(

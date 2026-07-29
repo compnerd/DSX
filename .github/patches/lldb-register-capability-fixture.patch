@@ -1,0 +1,32 @@
+diff --git a/lldb/test/API/tools/lldb-server/TestGdbRemote_qRegisterInfo.py b/lldb/test/API/tools/lldb-server/TestGdbRemote_qRegisterInfo.py
+--- a/lldb/test/API/tools/lldb-server/TestGdbRemote_qRegisterInfo.py
++++ b/lldb/test/API/tools/lldb-server/TestGdbRemote_qRegisterInfo.py
+@@ -160,10 +160,22 @@
+         # Gather register info entries.
+         reg_infos = self.parse_register_info_packets(context)
+ 
+-        # Collect all generics found.
+-        register_sets = {
+-            reg_info["set"]: 1 for reg_info in reg_infos if "set" in reg_info
++        # Register-set titles are presentation, not capability identifiers.
++        # RSP permits the upper 128 bits of YMM in ymmNh alongside xmmN;
++        # LLDB's native server instead describes full 256-bit ymmN registers.
++        registers = {
++            reg_info["name"]: int(reg_info["bitsize"]) for reg_info in reg_infos
+         }
+-        self.assertEqual(
+-            self.targetHasAVX(), "Advanced Vector Extensions" in register_sets
+-        )
++        count = 8 if self.getArchitecture() == "i386" else 16
++        available = [
++            registers.get(f"ymm{i}") == 256
++            or (
++                registers.get(f"ymm{i}h") == 128
++                and registers.get(f"xmm{i}") == 128
++            )
++            for i in range(count)
++        ]
++        if self.targetHasAVX():
++            self.assertTrue(all(available), "incomplete AVX register description")
++        else:
++            self.assertFalse(any(available), "unexpected AVX registers")

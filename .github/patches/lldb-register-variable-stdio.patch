@@ -1,0 +1,13 @@
+diff --git a/lldb/test/API/lang/c/register_variables/test.c b/lldb/test/API/lang/c/register_variables/test.c
+--- a/lldb/test/API/lang/c/register_variables/test.c
++++ b/lldb/test/API/lang/c/register_variables/test.c
+@@ -1,3 +1,9 @@
++#if defined(_WIN32) && defined(__i386__)
++// LLVM's current x86 varargs inlining loses UCRT printf's arguments,
++// eliminating f1 and its register values. Retain the call, not -O0:
++// this fixture must still exercise optimized register locations.
++__declspec(noinline) int __cdecl printf(const char *, ...);
++#endif
+ #include <stdio.h>
+ 
+ #if defined(__arm__) || defined(__aarch64__) || defined(__mips__) ||           \

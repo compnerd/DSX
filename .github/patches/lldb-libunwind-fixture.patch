@@ -1,0 +1,18 @@
+diff --git a/lldb/test/API/functionalities/unwind/libunwind_ret_injection/TestLibUnwindRetInjection.py b/lldb/test/API/functionalities/unwind/libunwind_ret_injection/TestLibUnwindRetInjection.py
+--- a/lldb/test/API/functionalities/unwind/libunwind_ret_injection/TestLibUnwindRetInjection.py
++++ b/lldb/test/API/functionalities/unwind/libunwind_ret_injection/TestLibUnwindRetInjection.py
+@@ -70,6 +70,14 @@
+ 
+         self.assertIsNotNone(libunwind_path, f"Failed to find libunwind in build tree")
+ 
++        # The injected library is not an executable dependency. Load its
++        # symbols explicitly before requiring the breakpoint to resolve, and
++        # deploy that same library when the inferior runs remotely.
++        module = target.AddModule(libunwind_path, None, None)
++        self.assertTrue(module.IsValid())
++        libunwind_path = lldbutil.install_to_target(self, libunwind_path)
++        module.SetPlatformFileSpec(lldb.SBFileSpec(libunwind_path))
++
+         # Set breakpoint in __libunwind_Registers_arm64_jumpto.
+         # This is the function that performs the actual jump and ret injection.
+         bp = target.BreakpointCreateByName("__libunwind_Registers_arm64_jumpto")

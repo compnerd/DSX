@@ -1,0 +1,28 @@
+diff --git a/lldb/test/API/debuginfod/Normal/TestDebuginfod.py b/lldb/test/API/debuginfod/Normal/TestDebuginfod.py
+--- a/lldb/test/API/debuginfod/Normal/TestDebuginfod.py
++++ b/lldb/test/API/debuginfod/Normal/TestDebuginfod.py
+@@ -1,3 +1,4 @@
++import ctypes
+ import os
+ import shutil
+ import tempfile
+@@ -177,10 +178,15 @@
+ 
+     def getUUID(self, filename):
+         try:
+-            spec = lldb.SBModuleSpec()
+-            spec.SetFileSpec(lldb.SBFileSpec(self.getBuildArtifact(filename)))
+-            module = lldb.SBModule(spec)
+-            uuid = module.GetUUIDString().replace("-", "").lower()
++            # Creating an SBModule here can cache the build-directory symbols
++            # before the negative test relocates the stripped executable.
++            specs = lldb.SBModuleSpecList.GetModuleSpecifications(
++                self.getBuildArtifact(filename)
++            )
++            spec = specs.GetSpecAtIndex(0)
++            uuid = ctypes.string_at(
++                int(spec.GetUUIDBytes()), spec.GetUUIDLength()
++            ).hex()
+             # Don't want lldb's fake 32 bit CRC's for this one
+             return uuid if len(uuid) > 8 else None
+         except:

@@ -1,0 +1,48 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/lldbtest.py b/lldb/packages/Python/lldbsuite/test/lldbtest.py
+--- a/lldb/packages/Python/lldbsuite/test/lldbtest.py
++++ b/lldb/packages/Python/lldbsuite/test/lldbtest.py
+@@ -1071,7 +1071,8 @@
+         return self.subprocesses[-1] if len(self.subprocesses) > 0 else None
+ 
+     def spawnSubprocess(
+-        self, executable, args=None, extra_env=None, install_remote=True, **kwargs
++        self, executable, args=None, extra_env=None, install_remote=True,
++        remote=True, **kwargs
+     ):
+         """Creates a subprocess.Popen object with the specified executable and arguments,
+         saves it in self.subprocesses, and returns the object.
+@@ -1079,7 +1080,7 @@
+         args = [] if args is None else args
+         proc = (
+             _RemoteProcess(install_remote)
+-            if lldb.remote_platform
++            if lldb.remote_platform and remote
+             else _LocalProcess(self.TraceOn())
+         )
+         proc.launch(executable, args, extra_env=extra_env, **kwargs)
+diff --git a/lldb/packages/Python/lldbsuite/test/lldbutil.py b/lldb/packages/Python/lldbsuite/test/lldbutil.py
+--- a/lldb/packages/Python/lldbsuite/test/lldbutil.py
++++ b/lldb/packages/Python/lldbsuite/test/lldbutil.py
+@@ -1960,8 +1960,11 @@
+     ] + exe_args
+     if log:
+         log(simctl_path + " " + " ".join(args))
+-    # simctl itself gets terminated when the test finishes.
+-    sim_launcher = test.spawnSubprocess(simctl_path, args, stderr=subprocess.PIPE)
++    # simctl controls the host's simulator, even with a remote test platform.
++    # Use the local wrapper's streams and process-group-safe cleanup.
++    sim_launcher = test.spawnSubprocess(
++        simctl_path, args, stderr=subprocess.PIPE, remote=False
++    )
+ 
+     # Read stderr to try to find matches.
+     # Each pattern will return the value of group[1] of the first match in the stderr.
+@@ -1974,7 +1977,7 @@
+         while True:
+             stderr = sim_launcher.stderr.readline().decode("utf-8")
+             if not stderr:
+-                continue
++                raise RuntimeError("simctl closed stderr before reporting a PID")
+             if log:
+                 log(f"searching stderr line: {stderr}")
+             for i, pattern in enumerate(stderr_patterns):

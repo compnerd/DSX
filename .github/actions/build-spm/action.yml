@@ -1,0 +1,51 @@
+name: Build DSX with SwiftPM
+description: Validate the compact SwiftPM build independently of CMake
+
+inputs:
+  scratch-path:
+    description: Independent SwiftPM build directory
+    required: true
+
+outputs:
+  bin:
+    description: Compact product directory
+    value: ${{ steps.build.outputs.bin }}
+
+runs:
+  using: composite
+  steps:
+    - id: build
+      shell: pwsh
+      env:
+        SCRATCH_PATH: ${{ inputs.scratch-path }}
+        EnableSwiftCachingByDefault: 'NO'
+        EnableSwiftExplicitModulesByDefault: 'NO'
+      run: |
+        $scratch = [IO.Path]::GetFullPath($env:SCRATCH_PATH)
+        $arguments = @("--build-system", "swiftbuild",
+          "--scratch-path", $scratch, "--configuration", "release",
+          "--triple", "x86_64-unknown-windows-msvc",
+          "-debug-info-format", "none", "-Xswiftc", "-Osize",
+          "-Xswiftc", "-Xfrontend", "-Xswiftc", "-disable-reflection-metadata",
+          "-Xswiftc", "-Xfrontend", "-Xswiftc", "-disable-reflection-names",
+          "-Xswiftc", "-Xfrontend",
+          "-Xswiftc", "-enable-single-module-llvm-emission",
+          "-Xswiftc", "-Xfrontend",
+          "-Xswiftc", "-disable-incremental-llvm-codegen",
+          "-Xlinker", "/Brepro")
+        foreach ($product in "DSX", "dsx") {
+          $name = $product -ceq "DSX" ? "DSX.lib" : "dsx-executable.lib"
+          $library = [IO.Path]::Join($scratch, $name)
+          swift build @arguments --product $product -Xlinker "/IMPLIB:$library"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        $bin = & swift build @arguments --show-bin-path
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if (!(Test-Path -LiteralPath "$bin/dsx.exe")) {
+          $products = [IO.Path]::Join($scratch, "out", "Products")
+          $matches = @(Get-ChildItem $products -Recurse -File -Filter dsx.exe)
+          if ($matches.Count -ne 1) { throw "Unable to locate dsx.exe" }
+          $bin = $matches[0].Directory.FullName
+        }
+        Copy-Item ([IO.Path]::Join($scratch, "DSX.lib")) $bin
+        "bin=$bin" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8

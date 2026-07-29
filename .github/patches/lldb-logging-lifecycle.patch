@@ -1,0 +1,49 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/lldbtest.py b/lldb/packages/Python/lldbsuite/test/lldbtest.py
+--- a/lldb/packages/Python/lldbsuite/test/lldbtest.py
++++ b/lldb/packages/Python/lldbsuite/test/lldbtest.py
+@@ -747,6 +747,10 @@ class Base(unittest.TestCase):
+         open(host_log_path, "w").close()
+         self.log_files.append(host_log_path)
+ 
++        # Cleanup also runs when setup skips or fails, before stopTest renames
++        # the logs. Register before enabling any channel to cover partial setup.
++        self.addCleanup(self.disableLogChannelsForCurrentTest)
++
+         log_enable = "log enable -Tpn -f {} ".format(host_log_path)
+         for channel_with_categories in lldbtest_config.channels:
+             channel_then_categories = channel_with_categories.split(" ", 1)
+@@ -778,18 +782,23 @@ class Base(unittest.TestCase):
+             # Communicate channels to lldb-server
+             os.environ["LLDB_SERVER_LOG_CHANNELS"] = ":".join(lldbtest_config.channels)
+ 
+-        self.addTearDownHook(self.disableLogChannelsForCurrentTest)
+-
+     def disableLogChannelsForCurrentTest(self):
+-        # close all log files that we opened
+-        for channel_and_categories in lldbtest_config.channels:
+-            # channel format - <channel-name> [<category0> [<category1> ...]]
+-            channel = channel_and_categories.split(" ", 1)[0]
+-            self.ci.HandleCommand("log disable " + channel, self.res)
+-            if not self.res.Succeeded():
+-                raise Exception(
+-                    "log disable failed (check LLDB_LOG_OPTION env variable)"
+-                )
++        # Channels are process-global. The test may have destroyed its debugger
++        # (and invalidated self.ci), so use an independent command interpreter.
++        debugger = lldb.SBDebugger.Create(False)
++        try:
++            interpreter = debugger.GetCommandInterpreter()
++            result = lldb.SBCommandReturnObject()
++            for channel_and_categories in lldbtest_config.channels:
++                # channel format - <channel-name> [<category0> [<category1> ...]]
++                channel = channel_and_categories.split(" ", 1)[0]
++                interpreter.HandleCommand("log disable " + channel, result)
++                if not result.Succeeded():
++                    raise Exception(
++                        "log disable failed (check LLDB_LOG_OPTION env variable)"
++                    )
++        finally:
++            lldb.SBDebugger.Destroy(debugger)
+ 
+         # Retrieve the server log (if any) from the remote system. It is assumed the server log
+         # is writing to the "server.log" file in the current test directory. This can be

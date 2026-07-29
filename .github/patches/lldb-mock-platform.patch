@@ -1,0 +1,13 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/lldbgdbclient.py b/lldb/packages/Python/lldbsuite/test/lldbgdbclient.py
+index b8f78a0c..f02138ca 100644
+--- a/lldb/packages/Python/lldbsuite/test/lldbgdbclient.py
++++ b/lldb/packages/Python/lldbsuite/test/lldbgdbclient.py
+@@ -22,6 +22,8 @@ class GDBRemoteTestBase(TestBase):
+ 
+     def setUp(self):
+         TestBase.setUp(self)
++        # The mock owns its process and paths, not the suite's remote server.
++        self.dbg.SetSelectedPlatform(lldb.SBPlatform("host"))
+         self.server = MockGDBServer(self.server_socket_class())
+         self.server.start()
+ 

@@ -1,0 +1,18 @@
+diff --git a/lldb/test/API/python_api/sbplatform/TestSBPlatform.py b/lldb/test/API/python_api/sbplatform/TestSBPlatform.py
+--- a/lldb/test/API/python_api/sbplatform/TestSBPlatform.py
++++ b/lldb/test/API/python_api/sbplatform/TestSBPlatform.py
+@@ -75,8 +75,12 @@ class SBPlatformAPICase(TestBase):
+         Path(destination).touch(mode=stat.S_IREAD, exist_ok=True)
+
+         def remove_destination_file():
+-            os.chmod(destination, stat.S_IWRITE)
+-            os.remove(destination)
++            try:
++                os.chmod(destination, stat.S_IWRITE)
++                os.remove(destination)
++            except FileNotFoundError:
++                # A failed transfer may already have removed its destination.
++                pass
+
+         self.addTearDownHook(remove_destination_file)
+

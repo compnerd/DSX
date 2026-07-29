@@ -1,0 +1,67 @@
+diff --git a/lldb/test/API/functionalities/breakpoint/breakpoint_locations/after_rebuild/TestLocationsAfterRebuild.py b/lldb/test/API/functionalities/breakpoint/breakpoint_locations/after_rebuild/TestLocationsAfterRebuild.py
+--- a/lldb/test/API/functionalities/breakpoint/breakpoint_locations/after_rebuild/TestLocationsAfterRebuild.py
++++ b/lldb/test/API/functionalities/breakpoint/breakpoint_locations/after_rebuild/TestLocationsAfterRebuild.py
+@@ -31,6 +31,11 @@
+         path_to_exe = self.getBuildArtifact()
+ 
+         (target, process, thread, bkpt) = lldbutil.run_to_name_breakpoint(self, "main")
++        if lldb.remote_platform:
++            # Deploy rebuilds from the original local fixture. After a reload,
++            # the executable module can refer to the remote copy; automatic
++            # installation would then copy that file onto itself.
++            self.runCmd("settings set target.auto-install-main-executable false")
+ 
+         # Let the process continue to exit:
+         process.Continue()
+@@ -41,6 +46,10 @@
+         # We have to rebuild twice with changed sources to get
+         # us to remove the first set of locations:
+         self.build(dictionary={"C_SOURCES": "second_main.c", "EXE": "a.out"})
++        executable = lldbutil.install_to_target(self, path_to_exe)
++        if lldb.remote_platform:
++            target.GetModuleAtIndex(0).SetPlatformFileSpec(
++                lldb.SBFileSpec(executable))
+ 
+         (target, process, thread, bkpt) = lldbutil.run_to_breakpoint_do_run(
+             self, target, bkpt
+@@ -52,6 +61,10 @@
+         os.remove(path_to_exe)
+ 
+         self.build(dictionary={"C_SOURCES": "third_main.c", "EXE": "a.out"})
++        executable = lldbutil.install_to_target(self, path_to_exe)
++        if lldb.remote_platform:
++            target.GetModuleAtIndex(0).SetPlatformFileSpec(
++                lldb.SBFileSpec(executable))
+ 
+         (target, process, thread, bkpt) = lldbutil.run_to_breakpoint_do_run(
+             self, target, bkpt
+diff --git a/lldb/test/API/functionalities/inferior-changed/TestInferiorChanged.py b/lldb/test/API/functionalities/inferior-changed/TestInferiorChanged.py
+--- a/lldb/test/API/functionalities/inferior-changed/TestInferiorChanged.py
++++ b/lldb/test/API/functionalities/inferior-changed/TestInferiorChanged.py
+@@ -27,6 +27,14 @@
+         d = {"C_SOURCES": "main2.c"}
+         self.build(dictionary=d)
+         self.setTearDownCleanup(dictionary=d)
++        if lldb.remote_platform:
++            # Keep deployment tied to the rebuilt local fixture, not the
++            # remote executable module selected after LLDB reloads it.
++            self.runCmd("settings set target.auto-install-main-executable false")
++            executable = lldbutil.install_to_target(self, self.exe)
++            target = self.dbg.GetSelectedTarget()
++            target.GetModuleAtIndex(0).SetPlatformFileSpec(
++                lldb.SBFileSpec(executable))
+         self.inferior_not_crashing()
+ 
+     def setUp(self):
+@@ -77,6 +85,11 @@
+             self, "main2.c", self.line2, num_expected_locations=1, loc_exact=True
+         )
+ 
++        if lldb.remote_platform:
++            executable = lldbutil.append_to_process_working_directory(
++                self, "a.out")
++            self.dbg.GetSelectedTarget().GetModuleAtIndex(0).SetPlatformFileSpec(
++                lldb.SBFileSpec(executable))
+         self.runCmd("run", RUN_SUCCEEDED)
+ 
+         # The stop reason of the thread should be breakpoint.

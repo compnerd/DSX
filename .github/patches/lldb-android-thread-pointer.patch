@@ -1,0 +1,23 @@
+diff --git a/lldb/test/API/commands/register/register_command/TestRegisters.py b/lldb/test/API/commands/register/register_command/TestRegisters.py
+--- a/lldb/test/API/commands/register/register_command/TestRegisters.py
++++ b/lldb/test/API/commands/register/register_command/TestRegisters.py
+@@ -687,6 +687,11 @@ class RegisterCommandsTestCase(TestBase):
+
+         # Evaluate pthread_self() and compare against fs_base register read.
+         pthread_self_code = "(uint64_t)pthread_self()"
++        if lldbplatformutil.target_is_android():
++            # Bionic stores pthread_internal_t in a TLS slot; pthread_self()
++            # is not the thread pointer. Compare the architectural base to
++            # the compiler's thread-pointer intrinsic instead.
++            pthread_self_code = "(uint64_t)__builtin_thread_pointer()"
+         pthread_self_val = current_frame.EvaluateExpression(pthread_self_code)
+         self.assertTrue(
+             pthread_self_val.IsValid(), f"{pthread_self_code} evaluation has failed"
+@@ -695,6 +700,7 @@ class RegisterCommandsTestCase(TestBase):
+         self.assertNotEqual(
+             reg_fs_base.GetValueAsSigned(-1), -1, f"fs_base returned -1 which is wrong"
+         )
++        self.assertSuccess(pthread_self_val.GetError())
+
+         self.assertEqual(
+             reg_fs_base.GetValueAsUnsigned(0),

@@ -1,0 +1,25 @@
+diff --git a/lldb/test/API/python_api/value/TestValueAPI.py b/lldb/test/API/python_api/value/TestValueAPI.py
+--- a/lldb/test/API/python_api/value/TestValueAPI.py
++++ b/lldb/test/API/python_api/value/TestValueAPI.py
+@@ -347,7 +347,17 @@ class ValueAPITestCase(TestBase):
+-                    self.assertTrue(sp_with_name_index < num_registers)
+-                    rsp_with_name_index = reg_set.GetIndexOfChildWithName("rsp")
+-                    self.assertTrue(rsp_with_name_index < num_registers)
+-                    self.assertEqual(sp_with_name_index, rsp_with_name_index)
++                    base = "rsp" if target.GetAddressByteSize() == 8 else "esp"
++                    rsp_with_name_index = reg_set.GetIndexOfChildWithName(base)
++                    # Remote ABIs can synthesize subregisters in a separate set.
++                    # Name lookup resolves the alias globally, then checks set
++                    # membership. Both lookups are invalid outside the base set.
++                    base_present = any(
++                        reg_set.GetChildAtIndex(index).GetName() == base
++                        for index in range(num_registers)
++                    )
++                    self.assertEqual(
++                        sp_with_name_index < num_registers, base_present
++                    )
++                    self.assertEqual(sp_with_name_index, rsp_with_name_index)
++                    self.assertEqual(frame.FindRegister("sp").GetName(), base)
+ 
+                     continue
+ 
