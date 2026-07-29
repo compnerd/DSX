@@ -1,0 +1,39 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/lldbutil.py b/lldb/packages/Python/lldbsuite/test/lldbutil.py
+--- a/lldb/packages/Python/lldbsuite/test/lldbutil.py
++++ b/lldb/packages/Python/lldbsuite/test/lldbutil.py
+@@ -1824,19 +1824,22 @@
+ def packetlog_get_process_info(log):
+     """parse a gdb-remote packet log file and extract the response to qProcessInfo"""
+-    process_info = dict()
++    from lldbsuite.test.gdbclientutils import PacketDirection, parse_packet_log
++
+     with open(log, "r") as logfile:
+-        process_info_ostype = None
+-        expect_process_info_response = False
+-        for line in logfile:
+-            if expect_process_info_response:
+-                for pair in line.split(";"):
+-                    keyval = pair.split(":")
+-                    if len(keyval) == 2:
+-                        process_info[keyval[0]] = keyval[1]
+-                break
+-            if "send packet: $qProcessInfo#" in line:
+-                expect_process_info_response = True
+-    return process_info
++        packets = parse_packet_log(logfile)
++    query = None
++    for direction, body in packets:
++        if direction == PacketDirection.SEND:
++            query = body
++        elif query == "qProcessInfo":
++            query = None
++            # Launch-mode connections may probe before an inferior exists.
++            # The later successful response describes the launched process.
++            if not body or body.startswith("E"):
++                continue
++            return dict(pair.split(":", 1) for pair in body.split(";")
++                        if ":" in pair)
++    return {}
+ 
+ 
+ def packetlog_get_dylib_info(log):

@@ -1,0 +1,12 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/test_result.py b/lldb/packages/Python/lldbsuite/test/test_result.py
+--- a/lldb/packages/Python/lldbsuite/test/test_result.py
++++ b/lldb/packages/Python/lldbsuite/test/test_result.py
+@@ -203,7 +203,7 @@ class LLDBTestResult(unittest.TextTestResult):
+         if self.checkExclusion(
+             configuration.xfail_tests, test.id()
+         ) or self.checkCategoryExclusion(configuration.xfail_categories, test):
+-            self.addUnexpectedSuccess(test, None)
++            self.addUnexpectedSuccess(test)
+             return
+ 
+         super(LLDBTestResult, self).addSuccess(test)

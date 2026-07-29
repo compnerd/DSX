@@ -1,0 +1,12 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/lldbplatformutil.py b/lldb/packages/Python/lldbsuite/test/lldbplatformutil.py
+--- a/lldb/packages/Python/lldbsuite/test/lldbplatformutil.py
++++ b/lldb/packages/Python/lldbsuite/test/lldbplatformutil.py
+@@ -241,7 +241,7 @@
+ def createPlatformContext():
+     if platformIsDarwin():
+         return _PlatformContext("DYLD_LIBRARY_PATH", ":", "lib", "dylib")
+-    elif getPlatform() in ("linux", "freebsd", "netbsd", "openbsd"):
++    elif getPlatform() in ("linux", "android", "freebsd", "netbsd", "openbsd"):
+         return _PlatformContext("LD_LIBRARY_PATH", ":", "lib", "so")
+     else:
+         return _PlatformContext("PATH", ";", "", "dll")

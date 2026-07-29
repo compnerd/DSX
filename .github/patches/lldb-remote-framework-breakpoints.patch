@@ -1,0 +1,119 @@
+diff --git a/lldb/test/API/lang/objc/exceptions/TestObjCExceptions.py b/lldb/test/API/lang/objc/exceptions/TestObjCExceptions.py
+--- a/lldb/test/API/lang/objc/exceptions/TestObjCExceptions.py
++++ b/lldb/test/API/lang/objc/exceptions/TestObjCExceptions.py
+@@ -21,8 +21,11 @@
+ 
+         launch_info = lldb.SBLaunchInfo(["a.out", "0"])
+         launch_info.SetLaunchFlags(lldb.eLaunchFlagInheritTCCFromParent)
+-        lldbutil.run_to_name_breakpoint(
+-            self, "objc_exception_throw", launch_info=launch_info
++        # A remote system library may not be available until the process loads
++        # it. Require the breakpoint to be hit, not resolved before launch.
++        breakpoint = target.BreakpointCreateByName("objc_exception_throw")
++        lldbutil.run_to_breakpoint_do_run(
++            self, target, breakpoint, launch_info=launch_info
+         )
+ 
+         self.expect(
+diff --git a/lldb/test/API/lang/objc/foundation/TestObjCMethods.py b/lldb/test/API/lang/objc/foundation/TestObjCMethods.py
+--- a/lldb/test/API/lang/objc/foundation/TestObjCMethods.py
++++ b/lldb/test/API/lang/objc/foundation/TestObjCMethods.py
+@@ -32,12 +32,15 @@
+         break_results = lldbutil.run_break_set_command(
+             self, "_regexp-break +[NSString stringWithFormat:]"
+         )
+-        lldbutil.check_breakpoint_result(
+-            self,
+-            break_results,
+-            symbol_name="+[NSString stringWithFormat:]",
+-            num_locations=1,
+-        )
++        # Remote system-library breakpoints may be pending until launch. The
++        # backtrace checks below still require every requested stop.
++        if not lldb.remote_platform:
++            lldbutil.check_breakpoint_result(
++                self,
++                break_results,
++                symbol_name="+[NSString stringWithFormat:]",
++                num_locations=1,
++            )
+ 
+         # Stop at -[MyString initWithNSString:].
+         lldbutil.run_break_set_by_symbol(
+@@ -56,12 +59,13 @@
+         break_results = lldbutil.run_break_set_command(
+             self, "_regexp-break -[NSAutoreleasePool release]"
+         )
+-        lldbutil.check_breakpoint_result(
+-            self,
+-            break_results,
+-            symbol_name="-[NSAutoreleasePool release]",
+-            num_locations=1,
+-        )
++        if not lldb.remote_platform:
++            lldbutil.check_breakpoint_result(
++                self,
++                break_results,
++                symbol_name="-[NSAutoreleasePool release]",
++                num_locations=1,
++            )
+ 
+         self.runCmd("run", RUN_SUCCEEDED)
+ 
+diff --git a/lldb/test/API/lang/objc/foundation/TestFoundationDisassembly.py b/lldb/test/API/lang/objc/foundation/TestFoundationDisassembly.py
+--- a/lldb/test/API/lang/objc/foundation/TestFoundationDisassembly.py
++++ b/lldb/test/API/lang/objc/foundation/TestFoundationDisassembly.py
+@@ -27,9 +27,12 @@
+             self, "_regexp-break %s" % (symbol_name)
+         )
+ 
+-        lldbutil.check_breakpoint_result(
+-            self, break_results, symbol_name=symbol_name, num_locations=1
+-        )
++        # Remote system-library breakpoints may be pending until launch. The
++        # backtrace checks below still require every requested stop.
++        if not lldb.remote_platform:
++            lldbutil.check_breakpoint_result(
++                self, break_results, symbol_name=symbol_name, num_locations=1
++            )
+ 
+         # Stop at -[MyString initWithNSString:].
+         lldbutil.run_break_set_by_symbol(
+@@ -48,12 +51,13 @@
+         break_results = lldbutil.run_break_set_command(
+             self, "_regexp-break -[NSAutoreleasePool release]"
+         )
+-        lldbutil.check_breakpoint_result(
+-            self,
+-            break_results,
+-            symbol_name="-[NSAutoreleasePool release]",
+-            num_locations=1,
+-        )
++        if not lldb.remote_platform:
++            lldbutil.check_breakpoint_result(
++                self,
++                break_results,
++                symbol_name="-[NSAutoreleasePool release]",
++                num_locations=1,
++            )
+ 
+         self.runCmd("run", RUN_SUCCEEDED)
+ 
+diff --git a/lldb/test/API/functionalities/breakpoint/objc/TestObjCBreakpoints.py b/lldb/test/API/functionalities/breakpoint/objc/TestObjCBreakpoints.py
+--- a/lldb/test/API/functionalities/breakpoint/objc/TestObjCBreakpoints.py
++++ b/lldb/test/API/functionalities/breakpoint/objc/TestObjCBreakpoints.py
+@@ -85,6 +85,14 @@
+         exe = self.getBuildArtifact("a.out")
+         self.target = self.dbg.CreateTarget(exe)
+         self.assertTrue(self.target, VALID_TARGET)
++        if lldb.remote_platform:
++            # The target's shared-cache selectors become available at launch.
++            breakpoint = self.target.BreakpointCreateByName("main")
++            _, process, _, _ = lldbutil.run_to_breakpoint_do_run(
++                self, self.target, breakpoint
++            )
++            self.target.BreakpointDelete(breakpoint.GetID())
++            self.assertSuccess(process.Kill())
+ 
+         # ----------------------------------------------------------------------
+         # Set breakpoints on all selectors whose name is "count". This should

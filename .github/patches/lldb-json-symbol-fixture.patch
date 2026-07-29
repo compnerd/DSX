@@ -1,0 +1,19 @@
+diff --git a/lldb/test/API/functionalities/json/symbol-file/TestSymbolFileJSON.py b/lldb/test/API/functionalities/json/symbol-file/TestSymbolFileJSON.py
+--- a/lldb/test/API/functionalities/json/symbol-file/TestSymbolFileJSON.py
++++ b/lldb/test/API/functionalities/json/symbol-file/TestSymbolFileJSON.py
+@@ -65,11 +65,13 @@
+             outfile.write(json_object)
+ 
+         # Create a stripped target.
+-        stripped_target = self.dbg.CreateTarget(stripped)
++        # Load this exact local file, not the remote platform's executable
++        # lookup, which can reuse the unstripped module with the same UUID.
++        stripped_target = self.dbg.CreateTarget("")
+         self.assertTrue(stripped_target, VALID_TARGET)
+ 
+         # Ensure there's no symbol for main and foo.
+-        stripped_module = stripped_target.GetModuleAtIndex(0)
++        stripped_module = stripped_target.AddModule(stripped, None, None)
+         self.assertFalse(stripped_module.FindSymbol("main").IsValid())
+         self.assertFalse(stripped_module.FindSymbol("foo").IsValid())
+         self.assertFalse(stripped_module.FindSymbol("bar").IsValid())

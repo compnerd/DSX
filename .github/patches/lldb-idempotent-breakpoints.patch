@@ -1,0 +1,17 @@
+diff --git a/lldb/test/API/functionalities/multi-breakpoint/TestMultiBreakpoint.py b/lldb/test/API/functionalities/multi-breakpoint/TestMultiBreakpoint.py
+--- a/lldb/test/API/functionalities/multi-breakpoint/TestMultiBreakpoint.py
++++ b/lldb/test/API/functionalities/multi-breakpoint/TestMultiBreakpoint.py
+@@ -61,8 +61,11 @@
+         return f"{addr:x}"
+ 
+     def test_multi_breakpoint(self):
+-        # Debugserver uses refcounted breakpoints
+-        breakpoints_are_refcounted = self.platformIsDarwin()
++        # Apple's debugserver reference-counts duplicate insertions. That is
++        # an implementation quirk, not a Darwin or RSP requirement.
++        breakpoints_are_refcounted = (
++            self.platformIsDarwin() and not lldbtest_config.out_of_tree_debugserver
++        )
+ 
+         self.build()
+         source_file = lldb.SBFileSpec("main.c")

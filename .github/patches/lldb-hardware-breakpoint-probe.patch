@@ -1,0 +1,20 @@
+diff --git a/lldb/test/API/functionalities/breakpoint/hardware_breakpoints/base.py b/lldb/test/API/functionalities/breakpoint/hardware_breakpoints/base.py
+--- a/lldb/test/API/functionalities/breakpoint/hardware_breakpoints/base.py
++++ b/lldb/test/API/functionalities/breakpoint/hardware_breakpoints/base.py
+@@ -13,9 +13,13 @@ class HardwareBreakpointTestBase(TestBase):
+         self.runCmd("file " + self.getBuildArtifact("a.out"), CURRENT_EXECUTABLE_SET)
+         self.runCmd("breakpoint set -b main --hardware")
+         self.runCmd("run")
+-        if "stopped" in self.res.GetOutput():
+-            return True
+-        return False
++        target = self.dbg.GetSelectedTarget()
++        process = target.GetProcess()
++        breakpoint = target.GetBreakpointAtIndex(0)
++        return (
++            process.GetState() == lldb.eStateStopped
++            and breakpoint.GetHitCount() > 0
++        )
+
+     def hw_breakpoints_supported(self):
+         if self.supports_hw_breakpoints():

@@ -1,0 +1,15 @@
+diff --git a/lldb/test/API/lang/objc/foundation/TestObjCMethodsNSError.py b/lldb/test/API/lang/objc/foundation/TestObjCMethodsNSError.py
+--- a/lldb/test/API/lang/objc/foundation/TestObjCMethodsNSError.py
++++ b/lldb/test/API/lang/objc/foundation/TestObjCMethodsNSError.py
+@@ -70,7 +70,10 @@
+         self.runCmd(f"proc plugin packet send EndTesting", check=False)
+ 
+         self.assertTrue(os.path.exists(logfile))
+-        log_text = open(logfile).read()
++        # Packet logs contain binary memory replies, not necessarily UTF-8.
++        # Preserve every byte while parsing their ASCII headers below.
++        with open(logfile, encoding="latin-1") as stream:
++            log_text = stream.read()
+         log_text = log_text.split("StartTesting", 1)[-1].split("EndTesting", 1)[0]
+ 
+         # The two assertions below only check that the packet is used at all (and

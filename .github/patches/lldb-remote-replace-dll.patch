@@ -1,0 +1,17 @@
+diff --git a/lldb/test/API/windows/launch/replace-dll/TestReplaceDLL.py b/lldb/test/API/windows/launch/replace-dll/TestReplaceDLL.py
+--- a/lldb/test/API/windows/launch/replace-dll/TestReplaceDLL.py
++++ b/lldb/test/API/windows/launch/replace-dll/TestReplaceDLL.py
+@@ -60,6 +60,13 @@ class ReplaceDllTestCase(TestBase):
+         os.remove(foo)
+         os.rename(bar, foo)
+
++        if lldb.remote_platform:
++            # The old module was removed above. Register the replacement so
++            # LaunchSimple uploads it to the remote working directory too.
++            environment = self.registerSharedLibrariesWithTarget(
++                target, shlib_names
++            )
++
+         process = target.LaunchSimple(
+             None, environment, self.get_process_working_directory()
+         )

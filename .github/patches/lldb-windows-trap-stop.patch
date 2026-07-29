@@ -1,0 +1,64 @@
+diff --git a/lldb/test/API/functionalities/builtin-debugtrap/TestBuiltinDebugTrap.py b/lldb/test/API/functionalities/builtin-debugtrap/TestBuiltinDebugTrap.py
+--- a/lldb/test/API/functionalities/builtin-debugtrap/TestBuiltinDebugTrap.py
++++ b/lldb/test/API/functionalities/builtin-debugtrap/TestBuiltinDebugTrap.py
+@@ -18,10 +18,14 @@ class BuiltinDebugTrapTestCase(TestBase):
+         "fatal trap that cannot be resumed as this test expects."
+     )
+     def test(self):
+-        platform_stop_reason = lldb.eStopReasonSignal
++        platform_stop_reason = (lldb.eStopReasonSignal,)
+         platform = self.getPlatform()
+-        if self.platformIsDarwin() or platform == "windows":
+-            platform_stop_reason = lldb.eStopReasonException
++        if self.platformIsDarwin():
++            platform_stop_reason = (lldb.eStopReasonException,)
++        elif platform == "windows":
++            # Native Windows reports exceptions. RSP can report the equivalent
++            # signal; the continuation and side-effect checks below still apply.
++            platform_stop_reason = (lldb.eStopReasonException, lldb.eStopReasonSignal)
+ 
+         self.build()
+         (target, process, thread, bkpt) = lldbutil.run_to_source_breakpoint(
+@@ -35,6 +39,6 @@ class BuiltinDebugTrapTestCase(TestBase):
+             self.runCmd("bt")
+             self.runCmd("ta v global")
+ 
+-        self.assertEqual(
++        self.assertIn(
+             process.GetSelectedThread().GetStopReason(), platform_stop_reason
+         )
+@@ -54,6 +58,6 @@ class BuiltinDebugTrapTestCase(TestBase):
+             self.runCmd("bt")
+             self.runCmd("ta v global")
+ 
+-        self.assertEqual(
++        self.assertIn(
+             process.GetSelectedThread().GetStopReason(), platform_stop_reason
+         )
+@@ -77,6 +81,6 @@ class BuiltinDebugTrapTestCase(TestBase):
+             self.runCmd("bt")
+             self.runCmd("ta v global")
+ 
+-        self.assertEqual(
++        self.assertIn(
+             process.GetSelectedThread().GetStopReason(), platform_stop_reason
+         )
+diff --git a/lldb/test/API/functionalities/breakpoint/debugbreak/TestDebugBreak.py b/lldb/test/API/functionalities/breakpoint/debugbreak/TestDebugBreak.py
+--- a/lldb/test/API/functionalities/breakpoint/debugbreak/TestDebugBreak.py
++++ b/lldb/test/API/functionalities/breakpoint/debugbreak/TestDebugBreak.py
+@@ -32,6 +32,15 @@ class DebugBreakTestCase(TestBase):
+             else lldb.eStopReasonSignal
+         )
+         thread = lldbutil.get_stopped_thread(process, stop_reason)
++        if (thread is None and lldb.remote_platform
++                and lldbplatformutil.getPlatform() == "windows"):
++            # A remote Windows stub can encode an embedded trap as RSP SIGTRAP
++            # rather than a native exception. Do not accept an arbitrary signal.
++            thread = lldbutil.get_stopped_thread(process, lldb.eStopReasonSignal)
++            self.assertIsNotNone(thread, "Missing remote breakpoint signal")
++            self.assertEqual(thread.GetStopReasonDataCount(), 1)
++            signal = process.GetUnixSignals().GetSignalNumberFromName("SIGTRAP")
++            self.assertEqual(thread.GetStopReasonDataAtIndex(0), signal)
+         self.assertIsNotNone(
+             thread, "Unable to find thread stopped at the __debugbreak()"
+         )

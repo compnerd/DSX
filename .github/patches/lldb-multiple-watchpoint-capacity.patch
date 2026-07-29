@@ -1,0 +1,17 @@
+diff --git a/lldb/test/API/commands/watchpoints/multiple_hits/TestMultipleHits.py b/lldb/test/API/commands/watchpoints/multiple_hits/TestMultipleHits.py
+--- a/lldb/test/API/commands/watchpoints/multiple_hits/TestMultipleHits.py
++++ b/lldb/test/API/commands/watchpoints/multiple_hits/TestMultipleHits.py
+@@ -30,6 +30,13 @@ class MultipleHitsTestCase(TestBase):
+         process = target.LaunchSimple(None, None, self.get_process_working_directory())
+         self.assertState(process.GetState(), lldb.eStateStopped)
+
++        error = lldb.SBError()
++        capacity = process.GetNumSupportedHardwareWatchpoints(error)
++        self.assertSuccess(error)
++        self.assertGreater(capacity, 0)
++        if capacity < 2:
++            self.skipTest("simultaneous hits require two hardware watchpoints")
++
+         thread = lldbutil.get_stopped_thread(process, lldb.eStopReasonBreakpoint)
+         self.assertIsNotNone(thread)
+

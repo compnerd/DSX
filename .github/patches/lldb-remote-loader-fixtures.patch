@@ -1,0 +1,64 @@
+diff --git a/lldb/test/API/functionalities/dyld-launch-linux/TestDyldLaunchLinux.py b/lldb/test/API/functionalities/dyld-launch-linux/TestDyldLaunchLinux.py
+--- a/lldb/test/API/functionalities/dyld-launch-linux/TestDyldLaunchLinux.py
++++ b/lldb/test/API/functionalities/dyld-launch-linux/TestDyldLaunchLinux.py
+@@ -29,8 +29,17 @@ class TestLinux64LaunchingViaDynamicLoader(TestBase):
+         if error.Fail():
+             return
+ 
+-        target = self.dbg.CreateTarget(exe)
++        local = exe
++        if lldb.remote_platform:
++            local = self.getBuildArtifact("interpreter")
++            self.assertSuccess(
++                lldb.remote_platform.Get(
++                    lldb.SBFileSpec(exe), lldb.SBFileSpec(local)
++                )
++            )
++        target = self.dbg.CreateTarget(local)
+         self.assertTrue(target, VALID_TARGET)
++        target.GetModuleAtIndex(0).SetPlatformFileSpec(lldb.SBFileSpec(exe))
+ 
+         # Set breakpoints both on shared library function as well as on
+         # main. Both of them will be pending breakpoints.
+@@ -46,12 +55,10 @@ class TestLinux64LaunchingViaDynamicLoader(TestBase):
+         )
+         lldbutil.install_to_target(self, self.getBuildArtifact("libsignal_file.so"))
+ 
+-        launch_info = lldb.SBLaunchInfo(
+-            [
+-                "--library-path",
+-                self.get_process_working_directory(),
+-                inferior_exe_path,
+-            ]
++        launch_info = lldb.SBLaunchInfo([inferior_exe_path])
++        launch_info.SetExecutableFile(lldb.SBFileSpec(exe), True)
++        launch_info.SetEnvironmentEntries(
++            ["LD_LIBRARY_PATH=" + self.get_process_working_directory()], True
+         )
+         launch_info.SetWorkingDirectory(self.get_process_working_directory())
+         error = lldb.SBError()
+diff --git a/lldb/test/API/functionalities/breakpoint/breakpoint_command/TestBreakpointCommand.py b/lldb/test/API/functionalities/breakpoint/breakpoint_command/TestBreakpointCommand.py
+--- a/lldb/test/API/functionalities/breakpoint/breakpoint_command/TestBreakpointCommand.py
++++ b/lldb/test/API/functionalities/breakpoint/breakpoint_command/TestBreakpointCommand.py
+@@ -682,15 +682,17 @@ class BreakpointCommandTestCase(TestBase):
+     @skipIf(oslist=no_match(["linux"]))
+     def test_break_at__dl_debug_state(self):
+         """
+-        Test lldb is able to stop at _dl_debug_state if it is set before the
+-        process is launched.
++        Test lldb can stop at the loader rendezvous when a user breakpoint
++        is set before launch, even when the debugger also uses that site.
+         """
+         self.build()
+         exe = self.getBuildArtifact("a.out")
+         self.runCmd("target create %s" % exe)
+-        bpid = lldbutil.run_break_set_by_symbol(
+-            self, "_dl_debug_state", num_expected_locations=-2
++        breakpoint = self.target().BreakpointCreateByRegex(
++            "^(_dl_debug_state|(__dl_)?rtld_db_dlactivity)$"
+         )
++        self.assertTrue(breakpoint.IsValid())
++        bpid = breakpoint.GetID()
+         self.runCmd("run")
+         self.assertIsNotNone(
+             lldbutil.get_one_thread_stopped_at_breakpoint_id(self.process(), bpid)

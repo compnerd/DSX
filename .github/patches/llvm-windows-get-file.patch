@@ -1,0 +1,88 @@
+diff --git a/lldb/source/Plugins/Platform/Windows/PlatformWindows.h b/lldb/source/Plugins/Platform/Windows/PlatformWindows.h
+--- a/lldb/source/Plugins/Platform/Windows/PlatformWindows.h
++++ b/lldb/source/Plugins/Platform/Windows/PlatformWindows.h
+@@ -44,6 +44,8 @@ public:
+ 
+   lldb_private::Status DisconnectRemote() override;
+ 
++  Status GetFile(const FileSpec &source, const FileSpec &destination) override;
++
+   uint32_t DoLoadImage(lldb_private::Process *process,
+                        const lldb_private::FileSpec &remote_file,
+                        const std::vector<std::string> *paths,
+diff --git a/lldb/source/Plugins/Platform/Windows/PlatformWindows.cpp b/lldb/source/Plugins/Platform/Windows/PlatformWindows.cpp
+--- a/lldb/source/Plugins/Platform/Windows/PlatformWindows.cpp
++++ b/lldb/source/Plugins/Platform/Windows/PlatformWindows.cpp
+@@ -9,3 +9,4 @@
+ #include "PlatformWindows.h"
++#include "llvm/ADT/ScopeExit.h"
+ 
+ #include <chrono>
+@@ -25,6 +25,7 @@
+ #include "lldb/Expression/FunctionCaller.h"
+ #include "lldb/Expression/UserExpression.h"
+ #include "lldb/Expression/UtilityFunction.h"
++#include "lldb/Host/FileSystem.h"
+ #include "lldb/Host/HostInfo.h"
+ #include "lldb/Target/DynamicLoader.h"
+ #include "lldb/Target/Process.h"
+@@ -35,6 +36,59 @@ using namespace lldb;
+ using namespace lldb_private;
+ 
+ LLDB_PLUGIN_DEFINE(PlatformWindows)
+ 
++Status PlatformWindows::GetFile(const FileSpec &source,
++                               const FileSpec &destination) {
++  if (!m_remote_platform_sp)
++    return Platform::GetFile(source, destination);
++
++  Status error;
++  auto fd = OpenFile(source, File::eOpenOptionReadOnly,
++                     lldb::eFilePermissionsFileDefault, error);
++  if (error.Fail())
++    return error;
++  auto close = llvm::scope_exit([&] {
++    Status ignored;
++    CloseFile(fd, ignored);
++  });
++
++  uint32_t permissions = 0;
++  if (GetFilePermissions(source, permissions).Fail() || permissions == 0)
++    permissions = lldb::eFilePermissionsFileDefault;
++  auto file = FileSystem::Instance().Open(
++      destination, File::eOpenOptionWriteOnly | File::eOpenOptionCanCreate |
++                       File::eOpenOptionTruncate,
++      permissions);
++  if (!file)
++    return Status::FromError(file.takeError());
++
++  char buffer[4096];
++  uint64_t offset = 0;
++  while (true) {
++    uint64_t count = ReadFile(fd, offset, buffer, sizeof(buffer), error);
++    if (error.Fail())
++      return error;
++    if (count == 0)
++      break;
++    size_t written = 0;
++    while (written < count) {
++      size_t amount = count - written;
++      error = (*file)->Write(buffer + written, amount);
++      if (error.Fail())
++        return error;
++      if (amount == 0)
++        return Status::FromErrorString("unable to write destination file");
++      written += amount;
++    }
++    offset += count;
++  }
++  error = (*file)->Close();
++  if (error.Fail())
++    return error;
++  close.release();
++  CloseFile(fd, error);
++  return error;
++}
++
+ static uint32_t g_initialize_count = 0;
+ 

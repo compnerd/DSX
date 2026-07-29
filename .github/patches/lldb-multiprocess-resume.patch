@@ -1,0 +1,86 @@
+diff --git a/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py b/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py
+index ef1d546c..511932e4 100644
+--- a/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py
++++ b/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py
+@@ -1,4 +1,5 @@
+ import random
++import re
+ 
+ from lldbsuite.test.decorators import *
+ from lldbsuite.test.lldbtest import *
+@@ -193,49 +194,38 @@ class TestGdbRemoteFork(GdbRemoteForkTestBase):
+ 
+     @add_test_categories(["fork"])
+     def test_vCont_two_processes(self):
+-        parent_pid, parent_tid, child_pid, child_tid = self.start_fork_test(
+-            ["fork", "stop"]
+-        )
+-
+-        self.test_sequence.add_log_lines(
+-            [
+-                # try to resume both processes
+-                "read packet: $vCont;c:p{}.{};c:p{}.{}#00".format(
+-                    parent_pid, parent_tid, child_pid, child_tid
+-                ),
+-                "send packet: $E03#00",
+-            ],
+-            True,
+-        )
+-        self.expect_gdbremote_sequence()
++        self.resume_processes("vCont;c:p{}.{};c:p{}.{}")
+ 
+     @add_test_categories(["fork"])
+     def test_vCont_all_processes_explicit(self):
+-        self.start_fork_test(["fork", "stop"])
+-
+-        self.test_sequence.add_log_lines(
+-            [
+-                # try to resume all processes implicitly
+-                "read packet: $vCont;c:p-1.-1#00",
+-                "send packet: $E03#00",
+-            ],
+-            True,
+-        )
+-        self.expect_gdbremote_sequence()
++        self.resume_processes("vCont;c:p-1.-1")
+ 
+     @add_test_categories(["fork"])
+     def test_vCont_all_processes_implicit(self):
+-        self.start_fork_test(["fork", "stop"])
+-
+-        self.test_sequence.add_log_lines(
+-            [
+-                # try to resume all processes implicitly
+-                "read packet: $vCont;c#00",
+-                "send packet: $E03#00",
+-            ],
+-            True,
+-        )
+-        self.expect_gdbremote_sequence()
++        self.resume_processes("vCont;c")
++
++    def resume_processes(self, command):
++        identifiers = self.start_fork_test(["fork", "stop"])
++        processes = dict(zip(identifiers[::2], identifiers[1::2]))
++        self._server.send_packet(command.format(*identifiers).encode())
++        reply = self._server.get_normal_packet()
++        match = re.match(rb"T02thread:p([0-9a-f]+)\.([0-9a-f]+);", reply)
++        self.assertIsNotNone(match, reply)
++        first = match[1].decode()
++        self.assertIn(first, processes)
++        self.assertEqual(match[2].decode(), processes[first])
++
++        # Both processes must remain controllable after a multi-process resume.
++        other = next(pid for pid in processes if pid != first)
++        command = f"vCont;c:p{other}.{processes[other]}"
++        self._server.send_packet(command.encode())
++        reply = self._server.get_normal_packet()
++        self.assertTrue(reply.startswith(f"T02thread:p{other}.".encode()),
++                        reply)
++        for pid, tid in processes.items():
++            self._server.send_packet(f"vCont;c:p{pid}.{tid}".encode())
++            self.assertEqual(self._server.get_normal_packet(),
++                             f"W00;process:{pid}".encode())
+ 
+     @add_test_categories(["fork"])
+     def test_threadinfo(self):

@@ -1,0 +1,24 @@
+diff --git a/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py b/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py
+--- a/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py
++++ b/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py
+@@ -166,7 +166,7 @@ class TestGdbRemoteFork(GdbRemoteForkTestBase):
+     def test_kill_all(self):
+         parent_pid, _, child_pid, _ = self.start_fork_test(["fork"])
+ 
+-        exit_regex = "[$]X09;process:([0-9a-f]+)#.*"
++        exit_regex = "[$]X09;process:([0-9a-f]+)(?:;description:[0-9a-f]*;)?#.*"
+         self.test_sequence.add_log_lines(
+             [
+                 # kill all processes
+diff --git a/lldb/test/API/tools/lldb-server/TestGdbRemoteForkNonStop.py b/lldb/test/API/tools/lldb-server/TestGdbRemoteForkNonStop.py
+--- a/lldb/test/API/tools/lldb-server/TestGdbRemoteForkNonStop.py
++++ b/lldb/test/API/tools/lldb-server/TestGdbRemoteForkNonStop.py
+@@ -75,7 +75,7 @@ class TestGdbRemoteForkNonStop(GdbRemoteForkTestBase):
+     def test_kill_all_nonstop(self):
+         parent_pid, _, child_pid, _ = self.start_fork_test(["fork"], nonstop=True)
+ 
+-        exit_regex = "X09;process:([0-9a-f]+)"
++        exit_regex = "X09;process:([0-9a-f]+)(?:;description:[0-9a-f]*;)?"
+         # Depending on a potential race, the second kill may make it into
+         # the async queue before we issue vStopped or after.  In the former
+         # case, we should expect the exit status in reply to vStopped.

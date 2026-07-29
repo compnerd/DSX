@@ -1,0 +1,21 @@
+diff --git a/lldb/test/API/commands/platform/basic/TestPlatformPython.py b/lldb/test/API/commands/platform/basic/TestPlatformPython.py
+--- a/lldb/test/API/commands/platform/basic/TestPlatformPython.py
++++ b/lldb/test/API/commands/platform/basic/TestPlatformPython.py
+@@ -31,11 +31,16 @@ class PlatformPythonTestCase(TestBase):
+         platform_data = self.dbg.GetAvailablePlatformInfoAtIndex(platform_idx)
+         platform_name = platform_data.GetValueForKey("name").GetStringValue(100)
+         self.assertNotEqual(platform_name, "host")
++        present = any(
++            self.dbg.GetPlatformAtIndex(index).GetName() == platform_name
++            for index in range(initial_num_platforms)
++        )
+         self.dbg.SetCurrentPlatform(platform_name)
+         selected_platform = self.dbg.GetSelectedPlatform()
+         self.assertTrue(selected_platform.IsValid())
+         self.assertEqual(selected_platform.GetName(), platform_name)
+-        self.assertEqual(self.dbg.GetNumPlatforms(), initial_num_platforms + 1)
++        expected = initial_num_platforms + (0 if present else 1)
++        self.assertEqual(self.dbg.GetNumPlatforms(), expected)
+         platform_found = False
+         for platform_idx in range(self.dbg.GetNumPlatforms()):
+             platform = self.dbg.GetPlatformAtIndex(platform_idx)

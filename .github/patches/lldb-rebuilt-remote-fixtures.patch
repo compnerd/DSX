@@ -1,0 +1,46 @@
+diff --git a/lldb/test/API/functionalities/breakpoint/breakpoint_locations/after_rebuild/TestLocationsAfterRebuild.py b/lldb/test/API/functionalities/breakpoint/breakpoint_locations/after_rebuild/TestLocationsAfterRebuild.py
+--- a/lldb/test/API/functionalities/breakpoint/breakpoint_locations/after_rebuild/TestLocationsAfterRebuild.py
++++ b/lldb/test/API/functionalities/breakpoint/breakpoint_locations/after_rebuild/TestLocationsAfterRebuild.py
+@@ -31,6 +31,11 @@
+         path_to_exe = self.getBuildArtifact()
+ 
+         (target, process, thread, bkpt) = lldbutil.run_to_name_breakpoint(self, "main")
++        if lldb.remote_platform:
++            # Deploy rebuilds from the original local fixture. After a reload,
++            # the executable module can refer to the remote copy; automatic
++            # installation would then copy that file onto itself.
++            self.runCmd("settings set target.auto-install-main-executable false")
+ 
+         # Let the process continue to exit:
+         process.Continue()
+@@ -41,6 +46,7 @@
+         # We have to rebuild twice with changed sources to get
+         # us to remove the first set of locations:
+         self.build(dictionary={"C_SOURCES": "second_main.c", "EXE": "a.out"})
++        lldbutil.install_to_target(self, path_to_exe)
+ 
+         (target, process, thread, bkpt) = lldbutil.run_to_breakpoint_do_run(
+             self, target, bkpt
+@@ -52,6 +58,7 @@
+         os.remove(path_to_exe)
+ 
+         self.build(dictionary={"C_SOURCES": "third_main.c", "EXE": "a.out"})
++        lldbutil.install_to_target(self, path_to_exe)
+ 
+         (target, process, thread, bkpt) = lldbutil.run_to_breakpoint_do_run(
+             self, target, bkpt
+diff --git a/lldb/test/API/functionalities/inferior-changed/TestInferiorChanged.py b/lldb/test/API/functionalities/inferior-changed/TestInferiorChanged.py
+--- a/lldb/test/API/functionalities/inferior-changed/TestInferiorChanged.py
++++ b/lldb/test/API/functionalities/inferior-changed/TestInferiorChanged.py
+@@ -27,6 +27,11 @@
+         d = {"C_SOURCES": "main2.c"}
+         self.build(dictionary=d)
+         self.setTearDownCleanup(dictionary=d)
++        if lldb.remote_platform:
++            # Keep deployment tied to the rebuilt local fixture, not the
++            # remote executable module selected after LLDB reloads it.
++            self.runCmd("settings set target.auto-install-main-executable false")
++            lldbutil.install_to_target(self, self.exe)
+         self.inferior_not_crashing()
+ 
+     def setUp(self):

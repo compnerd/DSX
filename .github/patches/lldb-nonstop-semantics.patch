@@ -1,0 +1,213 @@
+diff --git a/lldb/test/API/tools/lldb-server/TestNonStop.py b/lldb/test/API/tools/lldb-server/TestNonStop.py
+index 6f7dbd11..e3361311 100644
+--- a/lldb/test/API/tools/lldb-server/TestNonStop.py
++++ b/lldb/test/API/tools/lldb-server/TestNonStop.py
+@@ -1,3 +1,5 @@
++import re
++
+ from lldbsuite.test.decorators import *
+ from lldbsuite.test.lldbtest import *
+ 
+@@ -5,6 +7,45 @@ import gdbremote_testcase
+ 
+ 
+ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
++    def stopped_threads(self, query=b"?"):
++        threads = set()
++        while True:
++            self._server.send_packet(query)
++            reply = self._server.get_normal_packet()
++            if reply == b"OK":
++                return threads
++            match = re.match(rb"T[0-9a-fA-F]{2}thread:([0-9a-fA-F]+);", reply)
++            self.assertIsNotNone(match, reply)
++            threads.add(match[1])
++            query = b"vStopped"
++
++    def prepare_stopped_threads(self):
++        self.build()
++        self.set_inferior_startup_launch()
++        self.prep_debug_monitor_and_inferior(
++            inferior_args=["thread:new", "stop", "sleep:15"]
++        )
++        self.test_sequence.add_log_lines(
++            [
++                "read packet: $QNonStop:1#00",
++                "send packet: $OK#00",
++                "read packet: $c#63",
++                "send packet: $OK#00",
++                {"direction": "send", "regex": r"^%Stop:T"},
++            ],
++            True,
++        )
++        self.expect_gdbremote_sequence()
++        self.stopped_threads(b"vStopped")
++        # Non-stop mode leaves the other thread running. Stop it explicitly.
++        self._server.send_packet(b"vCont;t")
++        self.assertEqual(self._server.get_normal_packet(), b"OK")
++        self.assertTrue(self._server.get_normal_packet().startswith(b"Stop:T"))
++        self.stopped_threads(b"vStopped")
++        threads = self.stopped_threads()
++        self.assertEqual(len(threads), 2)
++        return sorted(threads)
++
+     @requireSignals
+     @add_test_categories(["llgs"])
+     def test_run(self):
+@@ -14,6 +55,12 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
+         procs = self.prep_debug_monitor_and_inferior(
+             inferior_args=["thread:segfault"] + thread_num * ["thread:new"]
+         )
++        self.add_threadinfo_collection_packets()
++        initial = self.expect_gdbremote_sequence()
++        all_threads = {
++            format(tid, "x") for tid in self.parse_threadinfo_packets(initial)
++        }
++        self.reset_test_sequence()
+         self.test_sequence.add_log_lines(
+             [
+                 "read packet: $QNonStop:1#00",
+@@ -26,7 +73,6 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
+         self.expect_gdbremote_sequence()
+ 
+         segv_signo = lldbutil.get_signal_number("SIGSEGV")
+-        all_threads = set()
+         all_segv_threads = []
+ 
+         # we should get segfaults from all the threads
+@@ -83,10 +129,8 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
+             # we should get only one segv from every thread
+             self.assertNotIn(segv_threads[0], all_segv_threads)
+             all_segv_threads.extend(segv_threads)
+-            # segv_threads + other_threads should always be a superset
+-            # of all_threads, i.e. we should get states for all threads
+-            # already started
+-            self.assertFalse(all_threads.difference(other_threads + segv_threads))
++            # RSP non-stop notifications describe stopped threads only.
++            # Previously resumed threads must not acquire fabricated stops.
+             all_threads.update(other_threads + segv_threads)
+ 
+             # verify that `?` returns the same result
+@@ -234,46 +278,13 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
+     @skipIfWindows
+     @add_test_categories(["llgs"])
+     def test_multiple_vCont(self):
+-        self.build()
+-        self.set_inferior_startup_launch()
+-        procs = self.prep_debug_monitor_and_inferior(
+-            inferior_args=["thread:new", "stop", "sleep:15"]
+-        )
+-        self.test_sequence.add_log_lines(
+-            [
+-                "read packet: $QNonStop:1#00",
+-                "send packet: $OK#00",
+-                "read packet: $c#63",
+-                "send packet: $OK#00",
+-                {
+-                    "direction": "send",
+-                    "regex": r"^%Stop:T[0-9a-fA-F]{2}thread:([0-9a-fA-F]+);",
+-                    "capture": {1: "tid1"},
+-                },
+-                "read packet: $vStopped#63",
+-                {
+-                    "direction": "send",
+-                    "regex": r"^[$]T[0-9a-fA-F]{2}thread:([0-9a-fA-F]+);",
+-                    "capture": {1: "tid2"},
+-                },
+-                "read packet: $vStopped#63",
+-                "send packet: $OK#00",
+-            ],
+-            True,
+-        )
+-        ret = self.expect_gdbremote_sequence()
+-
+-        self.reset_test_sequence()
+-        self.test_sequence.add_log_lines(
+-            [
+-                "read packet: $vCont;c:{}#00".format(ret["tid1"]),
+-                "send packet: $OK#00",
+-                "read packet: $vCont;c:{}#00".format(ret["tid2"]),
+-                "send packet: $E37#00",
+-            ],
+-            True,
+-        )
+-        self.expect_gdbremote_sequence()
++        first, second = self.prepare_stopped_threads()
++        self._server.send_packet(b"vCont;c:" + first)
++        self.assertEqual(self._server.get_normal_packet(), b"OK")
++        self.assertEqual(self.stopped_threads(), {second})
++        self._server.send_packet(b"vCont;c:" + second)
++        self.assertEqual(self._server.get_normal_packet(), b"OK")
++        self.assertEqual(self.stopped_threads(), set())
+ 
+     @add_test_categories(["llgs"])
+     @skipIfWindows  # Sometimes results in '$E37' instead of expected '$OK'
+@@ -295,59 +306,15 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
+         self.expect_gdbremote_sequence()
+ 
+     def vCont_then_partial_stop_test(self, run_both):
+-        self.build()
+-        self.set_inferior_startup_launch()
+-        procs = self.prep_debug_monitor_and_inferior(
+-            inferior_args=["thread:new", "stop", "sleep:15"]
+-        )
+-        self.test_sequence.add_log_lines(
+-            [
+-                "read packet: $QNonStop:1#00",
+-                "send packet: $OK#00",
+-                "read packet: $c#63",
+-                "send packet: $OK#00",
+-                {
+-                    "direction": "send",
+-                    "regex": r"^%Stop:T[0-9a-fA-F]{2}thread:([0-9a-fA-F]+);",
+-                    "capture": {1: "tid1"},
+-                },
+-                "read packet: $vStopped#63",
+-                {
+-                    "direction": "send",
+-                    "regex": r"^[$]T[0-9a-fA-F]{2}thread:([0-9a-fA-F]+);",
+-                    "capture": {1: "tid2"},
+-                },
+-                "read packet: $vStopped#63",
+-                "send packet: $OK#00",
+-            ],
+-            True,
+-        )
+-        ret = self.expect_gdbremote_sequence()
+-
+-        self.reset_test_sequence()
+-        if run_both:
+-            self.test_sequence.add_log_lines(
+-                [
+-                    "read packet: $vCont;c#00",
+-                ],
+-                True,
+-            )
+-        else:
+-            self.test_sequence.add_log_lines(
+-                [
+-                    "read packet: $vCont;c:{}#00".format(ret["tid1"]),
+-                ],
+-                True,
+-            )
+-        self.test_sequence.add_log_lines(
+-            [
+-                "send packet: $OK#00",
+-                "read packet: $vCont;t:{}#00".format(ret["tid2"]),
+-                "send packet: $E03#00",
+-            ],
+-            True,
+-        )
+-        self.expect_gdbremote_sequence()
++        first, second = self.prepare_stopped_threads()
++        command = b"vCont;c" if run_both else b"vCont;c:" + first
++        self._server.send_packet(command)
++        self.assertEqual(self._server.get_normal_packet(), b"OK")
++        self._server.send_packet(b"vCont;t:" + second)
++        self.assertEqual(self._server.get_normal_packet(), b"E03")
++        # An unsupported partial stop must not change either thread's state.
++        self.assertEqual(self.stopped_threads(),
++                         set() if run_both else {second})
+ 
+     @skipIfWindows
+     @add_test_categories(["llgs"])
