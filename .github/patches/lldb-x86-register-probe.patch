@@ -1,0 +1,12 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/lldbplatformutil.py b/lldb/packages/Python/lldbsuite/test/lldbplatformutil.py
+--- a/lldb/packages/Python/lldbsuite/test/lldbplatformutil.py
++++ b/lldb/packages/Python/lldbsuite/test/lldbplatformutil.py
+@@ -24,7 +24,7 @@
+ def check_first_register_readable(test_case):
+     arch = test_case.getArchitecture()
+ 
+-    if arch in ["x86_64", "i386"]:
++    if arch in ["x86_64", "i386", "i486", "i586", "i686"]:
+         test_case.expect("register read eax", substrs=["eax = 0x"])
+     elif arch in ["arm", "armv7", "armv7k", "armv8l", "armv7l"]:
+         test_case.expect("register read r0", substrs=["r0 = 0x"])

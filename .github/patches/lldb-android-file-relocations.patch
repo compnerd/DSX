@@ -1,0 +1,13 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/make/Android.rules b/lldb/packages/Python/lldbsuite/test/make/Android.rules
+--- a/lldb/packages/Python/lldbsuite/test/make/Android.rules
++++ b/lldb/packages/Python/lldbsuite/test/make/Android.rules
+@@ -48,5 +48,9 @@ ARCH_CXXFLAGS += \
+ 	-isystem $(TOOLCHAIN_SYSROOT)/usr/include/c++/v1
+
++# Tests inspect pointer initializers before launching a process. Preserve
++# link-time values in the image as well as runtime relocation records.
++ARCH_LDFLAGS += -Wl,--apply-dynamic-relocs
++
+ ARCH_LDFLAGS += \
+ 	--target=$(TRIPLE) \
+ 	--sysroot=$(TOOLCHAIN_SYSROOT) \

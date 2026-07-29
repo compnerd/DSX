@@ -1,0 +1,36 @@
+// Copyright © 2026 Saleem Abdulrasool <compnerd@compnerd.org>. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause
+
+#if os(Android) || os(Linux)
+#if os(Android)
+internal import Android
+#else
+internal import Glibc
+#endif
+internal import DSXShims
+
+extension LinuxDebugControl {
+  internal mutating func launch(_ config: borrowing Debuggee.Launch)
+      throws(Debuggee.Error) -> ProcessIdentifier {
+    let capture = config.input == nil || config.output == nil ||
+        config.error == nil
+    var descriptors = UnixDescriptors(reader: -1, writer: -1)
+    if capture {
+      descriptors = try UnixDescriptors(terminal: config.terminal)
+    }
+    let process = try config.spawn(descriptors: descriptors, unblock: unblock)
+    let identifier = ProcessIdentifier(rawValue: UInt64(process))
+    self.process = identifier
+    attached = false
+    configured = false
+    threads[process] = LinuxThreadState(process: identifier)
+    if capture {
+      reader = descriptors.release()
+      exhausted = false
+      let message = "capturing debuggee input and output with a pseudo-terminal"
+      DSX.log(message, level: .trace, channel: .process)
+    }
+    return identifier
+  }
+}
+#endif

@@ -1,0 +1,40 @@
+diff --git a/lldb/test/API/lang/objc/foundation/TestObjCMethodsNSError.py b/lldb/test/API/lang/objc/foundation/TestObjCMethodsNSError.py
+--- a/lldb/test/API/lang/objc/foundation/TestObjCMethodsNSError.py
++++ b/lldb/test/API/lang/objc/foundation/TestObjCMethodsNSError.py
+@@ -70,7 +70,10 @@
+         self.runCmd(f"proc plugin packet send EndTesting", check=False)
+ 
+         self.assertTrue(os.path.exists(logfile))
+-        log_text = open(logfile).read()
++        # Packet logs contain binary memory replies, not necessarily UTF-8.
++        # Preserve every byte while parsing their ASCII headers below.
++        with open(logfile, encoding="latin-1") as stream:
++            log_text = stream.read()
+         log_text = log_text.split("StartTesting", 1)[-1].split("EndTesting", 1)[0]
+ 
+         # The two assertions below only check that the packet is used at all (and
+diff --git a/lldb/packages/Python/lldbsuite/test/lldbutil.py b/lldb/packages/Python/lldbsuite/test/lldbutil.py
+--- a/lldb/packages/Python/lldbsuite/test/lldbutil.py
++++ b/lldb/packages/Python/lldbsuite/test/lldbutil.py
+@@ -1853,7 +1853,8 @@
+     import json
+ 
+     dylib_info = None
+-    with open(log, "r") as logfile:
++    # Binary memory responses can precede the JSON library response.
++    with open(log, encoding="latin-1") as logfile:
+         dylib_info = None
+         fetched_all_binary_addresses = False
+         expect_dylib_info_response = False
+@@ -1871,7 +1872,10 @@
+                     line = line[1:]
+                 line = line[1:]
+                 # Unescape '}'.
+-                dylib_info = json.loads(line.replace("}]", "}")[:-4])
++                # Decode the JSON's UTF-8, not the surrounding binary log.
++                dylib_info = json.loads(
++                    line.replace("}]", "}")[:-4].encode("latin-1")
++                )
+                 # See if this is an addresses-only response.
+                 if "images" in dylib_info:
+                     if len(dylib_info["images"]) > 0:

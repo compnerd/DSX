@@ -1,0 +1,29 @@
+diff --git a/lldb/test/API/functionalities/process_save_core_minidump_size_of_image/TestMinidumpSizeOfImage.py b/lldb/test/API/functionalities/process_save_core_minidump_size_of_image/TestMinidumpSizeOfImage.py
+--- a/lldb/test/API/functionalities/process_save_core_minidump_size_of_image/TestMinidumpSizeOfImage.py
++++ b/lldb/test/API/functionalities/process_save_core_minidump_size_of_image/TestMinidumpSizeOfImage.py
+@@ -8,5 +8,6 @@
+ import subprocess
+ import lldb
++from lldbsuite.test import lldbutil
+ from lldbsuite.test.decorators import *
+ from lldbsuite.test.lldbtest import *
+ 
+@@ -26,4 +27,8 @@
+         with open(lds, "w") as f:
++            # Bionic locates the program headers inside a loadable segment.
++            # Keep them mapped while retaining the two contiguous segments
++            # of different sizes that this regression exercises.
+             f.write(
+-                "PHDRS { ro PT_LOAD FLAGS(5); rw PT_LOAD FLAGS(6);"
++                "PHDRS { ro PT_LOAD FILEHDR PHDRS FLAGS(5);"
++                " rw PT_LOAD FLAGS(6);"
+                 " dyn PT_DYNAMIC FLAGS(6); stack PT_GNU_STACK FLAGS(6); }\n"
+@@ -142,5 +147,8 @@
+         self.build()
+         testlib_path = self.build_shared_lib()
++        # dlopen executes in the inferior, so pass its deployed path rather
++        # than the host's build directory when testing a remote platform.
++        testlib_path = lldbutil.install_to_target(self, testlib_path)
+         exe = self.getBuildArtifact("a.out")
+         core_path = self.getBuildArtifact("core.dmp")
+ 

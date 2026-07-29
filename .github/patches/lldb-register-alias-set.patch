@@ -1,0 +1,21 @@
+diff --git a/lldb/test/API/python_api/value/TestValueAPI.py b/lldb/test/API/python_api/value/TestValueAPI.py
+--- a/lldb/test/API/python_api/value/TestValueAPI.py
++++ b/lldb/test/API/python_api/value/TestValueAPI.py
+@@ -337,6 +337,7 @@ class ValueAPITestCase(TestBase):
+                 if (
+-                    self.getArchitecture() in ["amd64", "i386", "x86_64"]
++                    self.getArchitecture()
++                    in ["amd64", "i386", "i486", "i586", "i686", "x86_64"]
+                     and reg_name == "sp"
+                 ):
+                     # x86 has "rsp", and "sp" which is a subset of "rsp". Then there is
+                     # the ABI name "sp", which LLDB resolves to "rsp", not to the
+@@ -346,6 +347,7 @@ class ValueAPITestCase(TestBase):
+                     sp_with_name_index = reg_set.GetIndexOfChildWithName(reg_name)
+                     self.assertTrue(sp_with_name_index < num_registers)
+-                    rsp_with_name_index = reg_set.GetIndexOfChildWithName("rsp")
++                    base = "rsp" if self.target().addr_size == 8 else "esp"
++                    rsp_with_name_index = reg_set.GetIndexOfChildWithName(base)
+                     if rsp_with_name_index < num_registers:
+                         self.assertEqual(sp_with_name_index, rsp_with_name_index)
+                     else:

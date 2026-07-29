@@ -1,0 +1,54 @@
+diff --git a/lldb/test/API/lang/cpp/abi_tag_structors/TestAbiTagStructors.py b/lldb/test/API/lang/cpp/abi_tag_structors/TestAbiTagStructors.py
+--- a/lldb/test/API/lang/cpp/abi_tag_structors/TestAbiTagStructors.py
++++ b/lldb/test/API/lang/cpp/abi_tag_structors/TestAbiTagStructors.py
+@@ -5,6 +5,7 @@
+ 
+ import lldb
+ from lldbsuite.test.decorators import *
++from lldbsuite.test.decorators import _compiler_supports
+ from lldbsuite.test.lldbtest import *
+ from lldbsuite.test import lldbutil
+ 
+@@ -85,9 +86,7 @@
+         """
+         # In older versions of Clang the -gno-structor-decl-linkage-names
+         # behaviour was the default.
+-        if self.expectedCompiler(["clang"]) and self.expectedCompilerVersion(
+-            [">=", "22.0"]
+-        ):
++        if _compiler_supports(self.getCompiler(), "-gno-structor-decl-linkage-names"):
+             self.build(
+                 dictionary={"CXXFLAGS_EXTRAS": "-gno-structor-decl-linkage-names"}
+             )
+@@ -138,9 +137,7 @@
+     def test_nested_no_structor_linkage_names(self):
+         # In older versions of Clang the -gno-structor-decl-linkage-names
+         # behaviour was the default.
+-        if self.expectedCompiler(["clang"]) and self.expectedCompilerVersion(
+-            [">=", "22.0"]
+-        ):
++        if _compiler_supports(self.getCompiler(), "-gno-structor-decl-linkage-names"):
+             self.build(
+                 dictionary={"CXXFLAGS_EXTRAS": "-gno-structor-decl-linkage-names"}
+             )
+diff --git a/lldb/test/API/lang/cpp/expr-definition-in-dylib/TestExprDefinitionInDylib.py b/lldb/test/API/lang/cpp/expr-definition-in-dylib/TestExprDefinitionInDylib.py
+--- a/lldb/test/API/lang/cpp/expr-definition-in-dylib/TestExprDefinitionInDylib.py
++++ b/lldb/test/API/lang/cpp/expr-definition-in-dylib/TestExprDefinitionInDylib.py
+@@ -1,5 +1,6 @@
+ import lldb
+ from lldbsuite.test.decorators import *
++from lldbsuite.test.decorators import _compiler_supports
+ from lldbsuite.test.lldbtest import *
+ from lldbsuite.test import lldbutil
+ 
+@@ -83,9 +84,7 @@
+         """
+         # In older versions of Clang the -gno-structor-decl-linkage-names
+         # behaviour was the default.
+-        if self.expectedCompiler(["clang"]) and self.expectedCompilerVersion(
+-            [">=", "22.0"]
+-        ):
++        if _compiler_supports(self.getCompiler(), "-gno-structor-decl-linkage-names"):
+             self.build(
+                 dictionary={"CXXFLAGS_EXTRAS": "-gno-structor-decl-linkage-names"}
+             )

@@ -1,0 +1,52 @@
+diff --git a/lldb/test/API/commands/process/launch-with-shellexpand/TestLaunchWithShellExpand.py b/lldb/test/API/commands/process/launch-with-shellexpand/TestLaunchWithShellExpand.py
+--- a/lldb/test/API/commands/process/launch-with-shellexpand/TestLaunchWithShellExpand.py
++++ b/lldb/test/API/commands/process/launch-with-shellexpand/TestLaunchWithShellExpand.py
+@@ -22,6 +22,9 @@ class LaunchWithShellExpandTestCase(TestBase):
+     @skipIfDarwinEmbedded  # iOS etc don't launch the binary via a shell, so arg expansion won't happen
+     @expectedFailureNetBSD
+     def test(self):
++        if lldb.remote_platform:
++            # Platform::DebugProcess expands arguments only for IsHost().
++            self.skipTest("LLDB does not request remote shell expansion")
+         self.build()
+         target = self.createTestTarget()
+ 
+diff --git a/lldb/test/API/macosx/rosetta/TestRosetta.py b/lldb/test/API/macosx/rosetta/TestRosetta.py
+--- a/lldb/test/API/macosx/rosetta/TestRosetta.py
++++ b/lldb/test/API/macosx/rosetta/TestRosetta.py
+@@ -47,6 +47,10 @@ class TestRosetta(TestBase):
+     @skipIfDarwinEmbedded
+     def test_rosetta(self):
+         """There can be many tests in a test case - describe this test here."""
++        if lldb.remote_platform:
++            # A local oah/debugserver does not establish that the remote
++            # server supports Rosetta's translated register and task model.
++            self.skipTest("remote Rosetta server capability is not negotiated")
+         self.build(
+             dictionary={
+                 "TRIPLE": configuration.triple.replace(self.getArchitecture(), "x86_64")
+diff --git a/lldb/test/API/windows/debug-heap/TestWindowsDebugHeap.py b/lldb/test/API/windows/debug-heap/TestWindowsDebugHeap.py
+--- a/lldb/test/API/windows/debug-heap/TestWindowsDebugHeap.py
++++ b/lldb/test/API/windows/debug-heap/TestWindowsDebugHeap.py
+@@ -27,6 +27,10 @@ class DebugHeapTestCase(TestBase):
+         return process.GetSTDOUT(256)
+ 
+     def test_default(self):
++        if lldb.remote_platform:
++            # PlatformWindows::DebugProcess forwards remote launches before
++            # applying disable-debug-heap to the launch environment.
++            self.skipTest("LLDB does not forward the debug-heap setting")
+         output = self._run_to_exit()
+         self.assertIn("_NO_DEBUG_HEAP=1", output)
+         output = self._run_to_exit(["_NO_DEBUG_HEAP=2"])
+@@ -40,6 +44,10 @@ class DebugHeapTestCase(TestBase):
+         self.assertIn("_NO_DEBUG_HEAP=2", output)
+ 
+     def test_enabled(self):
++        if lldb.remote_platform:
++            # The remote launch path does not inject _NO_DEBUG_HEAP.
++            # Explicit environment forwarding remains covered by test_disabled.
++            self.skipTest("LLDB does not forward the debug-heap setting")
+         self.runCmd("settings set platform.plugin.windows.disable-debug-heap true")
+         output = self._run_to_exit()
+         self.assertIn("_NO_DEBUG_HEAP=1", output)

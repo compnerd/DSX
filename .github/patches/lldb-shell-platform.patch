@@ -1,0 +1,23 @@
+diff --git a/lldb/test/API/commands/platform/basic/TestPlatformCommand.py b/lldb/test/API/commands/platform/basic/TestPlatformCommand.py
+index 19dc5df5..2becd2f7 100644
+--- a/lldb/test/API/commands/platform/basic/TestPlatformCommand.py
++++ b/lldb/test/API/commands/platform/basic/TestPlatformCommand.py
+@@ -66,15 +66,15 @@ class PlatformCommandTestCase(TestBase):
+         triple = self.dbg.GetSelectedPlatform().GetTriple()
+         if re.match(".*-.*-windows", triple):
+             self.expect("platform shell dir c:\\", substrs=["Windows", "Program Files"])
+-            self.expect("shell dir c:\\", substrs=["Windows", "Program Files"])
+         elif re.match(".*-.*-.*-android", triple):
+             self.expect("platform shell ls /", substrs=["cache", "dev", "system"])
+-            self.expect("shell ls /", substrs=["cache", "dev", "system"])
+         else:
+             self.expect(
+                 "platform shell ls /", substrs=["dev", "tmp", "usr"], ordered=False
+             )
+-            self.expect("shell ls /", substrs=["dev", "tmp", "usr"], ordered=False)
++
++        # The shell alias executes on the host, not the selected platform.
++        self.expect("shell echo lldb-host-shell", substrs=["lldb-host-shell"])
+ 
+     @no_debug_info_test
+     def test_shell_builtin(self):

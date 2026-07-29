@@ -1,0 +1,43 @@
+diff --git a/lldb/test/API/commands/register/register_command/TestRegisters.py b/lldb/test/API/commands/register/register_command/TestRegisters.py
+--- a/lldb/test/API/commands/register/register_command/TestRegisters.py
++++ b/lldb/test/API/commands/register/register_command/TestRegisters.py
+@@ -243,4 +243,7 @@
+         # we start pushing floating point values on st% register stack
+         value = currentFrame.FindValue("fstat", lldb.eValueTypeRegister)
++        # RSP's i386 core feature uses 32-bit x87 control registers. Native
++        # servers may describe the narrower hardware field instead.
++        fstat_format = f"0x%0.{value.GetByteSize() * 2}x"
+         error = lldb.SBError()
+         reg_value_fstat_initial = value.GetValueAsUnsigned(error, 0)
+@@ -249,4 +252,5 @@
+         self.assertSuccess(error, "reading a value for fstat")
+         value = currentFrame.FindValue("ftag", lldb.eValueTypeRegister)
++        ftag_format = f"0x%0.{value.GetByteSize() * 2}x"
+         error = lldb.SBError()
+         reg_value_ftag_initial = value.GetValueAsUnsigned(error, 0)
+@@ -268,6 +272,6 @@
+                         "fstat" + " = ",
+                         str(
+-                            "0x%0.4x" % ((reg_value_fstat_initial & ~(0x3800)) | 0x3800)
++                            fstat_format % ((reg_value_fstat_initial & ~0x3800) | 0x3800)
+                         ),
+                     ],
+                 )
+@@ -281,6 +285,6 @@
+                     substrs=[
+                         "fstat" + " = ",
+-                        str("0x%0.4x" % (reg_value_fstat_initial - 0x0800)),
++                        str(fstat_format % (reg_value_fstat_initial - 0x0800)),
+                     ],
+                 )
+                 reg_value_fstat_initial = reg_value_fstat_initial - 0x0800
+@@ -295,7 +299,7 @@
+                     "ftag" + " = ",
+                     str(
+-                        "0x%0.4x"
+-                        % (reg_value_ftag_initial | (1 << fstat_top_pointer_initial))
++                        ftag_format
++                        % (reg_value_ftag_initial | (1 << fstat_top_pointer_initial))
+                     ),
+                 ],
+             )
