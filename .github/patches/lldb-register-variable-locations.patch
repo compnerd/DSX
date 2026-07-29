@@ -1,0 +1,46 @@
+diff --git a/lldb/test/API/lang/c/register_variables/TestRegisterVariables.py b/lldb/test/API/lang/c/register_variables/TestRegisterVariables.py
+--- a/lldb/test/API/lang/c/register_variables/TestRegisterVariables.py
++++ b/lldb/test/API/lang/c/register_variables/TestRegisterVariables.py
+@@ -47,6 +47,3 @@ class RegisterVariableTestCase(TestBase):
+-        # The breakpoint should have a hit count of 1.
+-        lldbutil.check_breakpoint(
+-            self, bpno=1, location_id=1, expected_location_hit_count=1
+-        )
++        self.check_stop("f1")
+ 
+         # Try some variables that should be visible
+@@ -97,6 +94,3 @@ class RegisterVariableTestCase(TestBase):
+-        # The breakpoint should have a hit count of 1.
+-        lldbutil.check_breakpoint(
+-            self, bpno=1, location_id=2, expected_location_hit_count=1
+-        )
++        self.check_stop("f2")
+ 
+         # Try some variables that should be visible
+@@ -130,6 +124,3 @@ class RegisterVariableTestCase(TestBase):
+-        # The breakpoint should have a hit count of 1.
+-        lldbutil.check_breakpoint(
+-            self, bpno=1, location_id=3, expected_location_hit_count=1
+-        )
++        self.check_stop("main")
+ 
+         # Try some variables that should be visible
+@@ -174,4 +165,18 @@ class RegisterVariableTestCase(TestBase):
+         self.runCmd("kill")
+ 
++    def check_stop(self, function):
++        thread = self.thread()
++        self.assertEqual(thread.GetStopReason(), lldb.eStopReasonBreakpoint)
++        self.assertEqual(thread.GetStopReasonDataCount(), 2)
++        self.assertEqual(thread.GetStopReasonDataAtIndex(0), 1)
++        self.assertEqual(thread.GetFrameAtIndex(0).GetFunctionName(), function)
++        # Loading a deployed image can add locations after those created
++        # against the local symbol file. Check the location actually hit,
++        # retaining the expected function, breakpoint and hit-count checks.
++        lldbutil.check_breakpoint(
++            self, bpno=1, location_id=thread.GetStopReasonDataAtIndex(1),
++            expected_location_hit_count=1
++        )
++
+     def is_variable_in_register(self, frame, var_name):
+         # Ensure we can lookup the variable.

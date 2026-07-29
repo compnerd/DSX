@@ -1,0 +1,15 @@
+diff --git a/lldb/test/API/macosx/simulator/TestSimulatorPlatform.py b/lldb/test/API/macosx/simulator/TestSimulatorPlatform.py
+--- a/lldb/test/API/macosx/simulator/TestSimulatorPlatform.py
++++ b/lldb/test/API/macosx/simulator/TestSimulatorPlatform.py
+@@ -91,8 +91,10 @@ class TestSimulatorPlatformLaunching(TestBase):
+             # Verify that processes on the platform can be listed.
+             self.expect(
+                 "platform process list",
+                 patterns=[
+-                    r"\d+ matching processes were found on \"%s-simulator\""
++                    # The fixture may be the simulator's only visible process.
++                    r"(?:1 matching process was|\d+ matching processes were) "
++                    r"found on \"%s-simulator\""
+                     % expected_platform,
+                     r"%d .+ a.out" % pid,
+                 ],

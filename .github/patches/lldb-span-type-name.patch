@@ -1,0 +1,14 @@
+diff --git a/lldb/test/API/functionalities/data-formatter/data-formatter-stl/generic/span/TestDataFormatterStdSpan.py b/lldb/test/API/functionalities/data-formatter/data-formatter-stl/generic/span/TestDataFormatterStdSpan.py
+--- a/lldb/test/API/functionalities/data-formatter/data-formatter-stl/generic/span/TestDataFormatterStdSpan.py
++++ b/lldb/test/API/functionalities/data-formatter/data-formatter-stl/generic/span/TestDataFormatterStdSpan.py
+@@ -92,7 +92,9 @@
+ 
+         # check access to synthetic children for dynamic spans
++        # PDB does not preserve this typedef. Use the type it describes instead
++        # of assuming a particular signed spelling of size_t(-1).
+         dynamic_string_span = (
+-            "std::span<std::basic_string<char, std::char_traits<char>, std::allocator<char>>, -1>"
++            self.findVariable("strings_span").GetType().GetName()
+             if self.getDebugInfo() == "pdb"
+             else "dynamic_string_span"
+         )

@@ -1,0 +1,15 @@
+diff --git a/lldb/test/API/functionalities/breakpoint/hardware_breakpoints/hardware_breakpoint_on_multiple_threads/TestHWBreakMultiThread.py b/lldb/test/API/functionalities/breakpoint/hardware_breakpoints/hardware_breakpoint_on_multiple_threads/TestHWBreakMultiThread.py
+--- a/lldb/test/API/functionalities/breakpoint/hardware_breakpoints/hardware_breakpoint_on_multiple_threads/TestHWBreakMultiThread.py
++++ b/lldb/test/API/functionalities/breakpoint/hardware_breakpoints/hardware_breakpoint_on_multiple_threads/TestHWBreakMultiThread.py
+@@ -83,7 +83,10 @@
+ 
+         # Check the breakpoint list.
+         self.expect("breakpoint list", substrs=["hw_break_function", "hardware"])
++        # PDB symbols include the return type and argument list. Check the
++        # function identity without requiring DWARF's display spelling.
+         self.expect(
+             "breakpoint list -v",
+-            substrs=["function = hw_break_function", "hardware = true"],
++            substrs=["hardware = true"],
++            patterns=[r"(?m)function = [^\n]*\bhw_break_function(?:\(|\s*$)"],
+         )

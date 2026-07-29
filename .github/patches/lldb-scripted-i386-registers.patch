@@ -1,0 +1,98 @@
+diff --git a/lldb/examples/python/templates/scripted_process.py b/lldb/examples/python/templates/scripted_process.py
+--- a/lldb/examples/python/templates/scripted_process.py
++++ b/lldb/examples/python/templates/scripted_process.py
+@@ -425,6 +425,9 @@ class ScriptedThread(metaclass=ABCMeta):
+             if "x86_64" in self.arch:
+                 self.register_info["sets"] = ["General Purpose Registers"]
+                 self.register_info["registers"] = INTEL64_GPR
++            elif self.arch == "i386":
++                self.register_info["sets"] = ["General Purpose Registers"]
++                self.register_info["registers"] = INTEL32_GPR
+             elif "arm64" in self.arch or self.arch == "aarch64":
+                 self.register_info["sets"] = ["General Purpose Registers"]
+                 self.register_info["registers"] = ARM64_GPR
+@@ -630,6 +633,9 @@ class ScriptedFrame(metaclass=ABCMeta):
+                 if "x86_64" in self.arch:
+                     self.register_info["sets"] = ["General Purpose Registers"]
+                     self.register_info["registers"] = INTEL64_GPR
++                elif self.arch == "i386":
++                    self.register_info["sets"] = ["General Purpose Registers"]
++                    self.register_info["registers"] = INTEL32_GPR
+                 elif "arm64" in self.arch or self.arch == "aarch64":
+                     self.register_info["sets"] = ["General Purpose Registers"]
+                     self.register_info["registers"] = ARM64_GPR
+@@ -1892,6 +1898,35 @@ HEXAGON_GPR = [
+     },
+ ]
+ 
++# Packed 32-bit general registers in i386 DWARF order. Arguments are passed
++# according to the selected calling convention, not assigned generic roles
++# here. Stack/frame pointers, PC and flags have architecture-defined roles.
++INTEL32_GPR = [
++    {
++        "name": name,
++        "bitsize": 32,
++        "offset": number * 4,
++        "encoding": "uint",
++        "format": "hex",
++        "set": 0,
++        "dwarf": number,
++        **({"generic": role, "alt-name": role} if role else {}),
++    }
++    for number, (name, role) in enumerate([
++        ("eax", None),
++        ("ecx", None),
++        ("edx", None),
++        ("ebx", None),
++        ("esp", "sp"),
++        ("ebp", "fp"),
++        ("esi", None),
++        ("edi", None),
++        ("eip", "pc"),
++        ("eflags", "flags"),
++    ])
++]
++
++
+ INTEL64_GPR = [
+     {
+         "name": "rax",
+diff --git a/lldb/test/API/functionalities/scripted_process/TestScriptedProcess.py b/lldb/test/API/functionalities/scripted_process/TestScriptedProcess.py
+--- a/lldb/test/API/functionalities/scripted_process/TestScriptedProcess.py
++++ b/lldb/test/API/functionalities/scripted_process/TestScriptedProcess.py
+@@ -18,5 +18,35 @@ class ScriptedProcesTestCase(TestBase):
+     NO_DEBUG_INFO_TESTCASE = True
+ 
++    def test_i386_register_info(self):
++        """Scripted threads and native-thread frames share the i386 layout."""
++        from types import SimpleNamespace
++        from lldb.plugins.scripted_process import ScriptedFrame, ScriptedThread
++
++        names = ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi",
++                 "eip", "eflags"]
++        roles = {"esp": "sp", "ebp": "fp", "eip": "pc", "eflags": "flags"}
++        layouts = []
++        for cls in (ScriptedThread, ScriptedFrame):
++            state = SimpleNamespace(arch="i386", register_info=None,
++                                    originating_thread=lldb.SBThread())
++            info = cls.get_register_info(state)
++            self.assertIs(cls.get_register_info(state), info)
++            self.assertEqual(info["sets"], ["General Purpose Registers"])
++            registers = info["registers"]
++            self.assertEqual([r["name"] for r in registers], names)
++            for number, register in enumerate(registers):
++                self.assertEqual(register["bitsize"], 32)
++                self.assertEqual(register["offset"], number * 4)
++                self.assertEqual(register["dwarf"], number)
++                self.assertEqual(register["encoding"], "uint")
++                self.assertEqual(register["format"], "hex")
++                self.assertEqual(register["set"], 0)
++                role = roles.get(register["name"])
++                self.assertEqual(register.get("generic"), role)
++                self.assertEqual(register.get("alt-name"), role)
++            layouts.append(info)
++        self.assertEqual(*layouts)
++
+     @skipUnlessDarwin
+     def test_python_plugin_package(self):
+         """Test that the lldb python module has a `plugins.scripted_process`

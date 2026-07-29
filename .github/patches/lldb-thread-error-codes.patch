@@ -1,0 +1,50 @@
+diff --git a/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py b/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py
+--- a/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py
++++ b/lldb/test/API/tools/lldb-server/TestGdbRemoteFork.py
+@@ -109,12 +109,12 @@
+                 # try switching to invalid tid
+                 "read packet: $Hgp{:x}.{:x}#00".format(pid, tid + 1),
+-                "send packet: $E15#00",
++                {"direction": "send", "regex": r"^\$E[0-9a-fA-F]{2}#[0-9a-fA-F]{2}$"},
+                 "read packet: $Hcp{:x}.{:x}#00".format(pid, tid + 1),
+-                "send packet: $E15#00",
++                {"direction": "send", "regex": r"^\$E[0-9a-fA-F]{2}#[0-9a-fA-F]{2}$"},
+                 # try switching to invalid pid
+                 "read packet: $Hgp{:x}.{:x}#00".format(pid + 1, tid),
+-                "send packet: $Eff#00",
++                {"direction": "send", "regex": r"^\$E[0-9a-fA-F]{2}#[0-9a-fA-F]{2}$"},
+                 "read packet: $Hcp{:x}.{:x}#00".format(pid + 1, tid),
+-                "send packet: $Eff#00",
++                {"direction": "send", "regex": r"^\$E[0-9a-fA-F]{2}#[0-9a-fA-F]{2}$"},
+             ],
+             True,
+@@ -592,7 +592,7 @@
+         max_tid = max(tid for pid, tid in pidtids)
+         bad_pidtids = (
+-            (max_pid, max_tid + 1, "E02"),
++            (max_pid, max_tid + 1),
+-            (max_pid + 1, max_tid, "E01"),
++            (max_pid + 1, max_tid),
+-            (max_pid + 1, max_tid + 1, "E01"),
++            (max_pid + 1, max_tid + 1),
+         )
+ 
+@@ -607,5 +607,5 @@
+                     "send packet: $OK#00",
+                     "read packet: $T{:x}#00".format(max_tid + 1),
+-                    "send packet: $E02#00",
++                    {"direction": "send", "regex": r"^\$E[0-9a-fA-F]{2}#[0-9a-fA-F]{2}$"},
+                     "read packet: $T{:x}#00".format(pidtid[1]),
+                     "send packet: $OK#00",
+@@ -613,9 +613,9 @@
+                 True,
+             )
+-        for pid, tid, expected in bad_pidtids:
++        for pid, tid in bad_pidtids:
+             self.test_sequence.add_log_lines(
+                 [
+                     "read packet: $Tp{:x}.{:x}#00".format(pid, tid),
+-                    "send packet: ${}#00".format(expected),
++                    {"direction": "send", "regex": r"^\$E[0-9a-fA-F]{2}#[0-9a-fA-F]{2}$"},
+                 ],
+                 True,

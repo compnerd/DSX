@@ -1,0 +1,11 @@
+diff --git a/lldb/test/API/functionalities/scripted_process/baz.h b/lldb/test/API/functionalities/scripted_process/baz.h
+--- a/lldb/test/API/functionalities/scripted_process/baz.h
++++ b/lldb/test/API/functionalities/scripted_process/baz.h
+@@ -3,4 +3,6 @@
+ #include <condition_variable>
+ #include <mutex>
+ 
+-int baz(int &j, std::mutex &mutex, std::condition_variable &cv);
++// The fixture crosses a DLL boundary on Windows. Use the harness's shared
++// library annotation so the producer exports and the consumer imports it.
++LLDB_TEST_API int baz(int &j, std::mutex &mutex, std::condition_variable &cv);

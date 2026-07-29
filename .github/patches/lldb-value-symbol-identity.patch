@@ -1,0 +1,17 @@
+diff --git a/lldb/test/API/python_api/value/TestValueAPI.py b/lldb/test/API/python_api/value/TestValueAPI.py
+--- a/lldb/test/API/python_api/value/TestValueAPI.py
++++ b/lldb/test/API/python_api/value/TestValueAPI.py
+@@ -86,7 +86,12 @@
+         # While we are at it, verify that 'my_int_ptr' points to 'g_my_int'.
+         symbol = target.ResolveLoadAddress(int(pointed.GetLocation(), 0)).GetSymbol()
+         self.assertTrue(symbol)
+-        self.expect(symbol.GetName(), exe=False, startstr="g_my_int")
++        # Compare identity, not linker spelling (i386 COFF uses _g_my_int).
++        global_value = target.FindFirstGlobalVariable("g_my_int")
++        self.assertTrue(global_value, VALID_VARIABLE)
++        address = global_value.GetAddress()
++        self.assertTrue(address.IsValid())
++        self.assertEqual(symbol.GetStartAddress(), address)
+ 
+         # Get variable 'str_ptr'.
+         value = frame0.FindVariable("str_ptr")

@@ -1,0 +1,25 @@
+diff --git a/lldb/test/API/python_api/compile_unit/TestCompileUnitAPI.py b/lldb/test/API/python_api/compile_unit/TestCompileUnitAPI.py
+--- a/lldb/test/API/python_api/compile_unit/TestCompileUnitAPI.py
++++ b/lldb/test/API/python_api/compile_unit/TestCompileUnitAPI.py
+@@ -6,6 +6,6 @@
+ from lldbsuite.test.decorators import *
+ from lldbsuite.test.lldbtest import *
+-from lldbsuite.test import lldbutil
++from lldbsuite.test import lldbplatformutil, lldbutil
+
+
+ class CompileUnitAPITestCase(TestBase):
+@@ -74,7 +74,12 @@
+     def test_is_optimized(self):
+         """A compile unit built with optimization reports it."""
+-        self.build(dictionary={"CFLAGS_EXTRAS": "-O1"})
++        flags = "-O1"
++        if lldbplatformutil.target_is_android():
++            # NDK Clang defaults to GDB tuning, which omits the optimized
++            # compile-unit attribute that this LLDB API inspects.
++            flags += " -glldb"
++        self.build(dictionary={"CFLAGS_EXTRAS": flags})
+         self.assertTrue(self.find_main_compile_unit().GetIsOptimized())
+
+     def test_is_not_optimized(self):
+         """A compile unit built without optimization reports it."""

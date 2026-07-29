@@ -1,0 +1,74 @@
+// Copyright © 2026 Saleem Abdulrasool <compnerd@compnerd.org>. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause
+
+internal struct SavedRegisters: Sendable {
+  internal let thread: ProcessThreadIdentifier
+  internal let bytes: Array<UInt8>
+  internal let configuration: RegisterConfiguration
+
+  internal init(thread: ProcessThreadIdentifier, bytes: consuming Array<UInt8>,
+                configuration: RegisterConfiguration =
+                    RegisterConfiguration()) {
+    self.thread = thread
+    self.bytes = consume bytes
+    self.configuration = configuration
+  }
+}
+
+extension SavedRegisters {
+  @inline(__always)
+  internal init(_ thread: ProcessThreadIdentifier,
+                control: borrowing NativeDebugControl) throws(Debuggee.Error) {
+    try NativeRegisterState.synchronize(thread, control: control)
+    let snapshot = try NativeRegisterState(thread, control: control)
+    let description = RegisterDescription(snapshot.configuration)
+    var size = NativeRegisterState.checkpoint
+    for index in 0 ..< description.count {
+      guard let record = description.register(index),
+          case .some = record.numbers.gdb,
+          NativeRegisterState.access(record.identifier) == .mutable else {
+        continue
+      }
+      size += record.bytes
+    }
+    var bytes = Array<UInt8>()
+    try bytes.append(addingCapacity: size) { output throws(Debuggee.Error) in
+      for index in 0 ..< description.count {
+        guard let record = description.register(index),
+            case .some = record.numbers.gdb,
+            NativeRegisterState.access(record.identifier) == .mutable else {
+          continue
+        }
+        try snapshot.read(record.identifier, into: &output)
+      }
+      try snapshot.checkpoint(into: &output)
+    }
+    self.init(thread: thread, bytes: bytes,
+              configuration: snapshot.configuration)
+  }
+}
+
+extension NativeRegisterState {
+  @inline(__always)
+  internal mutating func restore(_ saved: borrowing SavedRegisters)
+      throws(Debuggee.Error) {
+    let description = RegisterDescription(saved.configuration)
+    var offset = 0
+    for index in 0 ..< description.count {
+      guard let record = description.register(index),
+          case .some = record.numbers.gdb,
+          NativeRegisterState.access(record.identifier) == .mutable else {
+        continue
+      }
+      let size = record.bytes
+      guard offset <= saved.bytes.count,
+          size <= saved.bytes.count - offset else {
+        throw .register
+      }
+      let bytes = saved.bytes.span.extracting(offset ..< (offset + size))
+      try write(record.identifier, bytes: bytes)
+      offset += size
+    }
+    try checkpoint(saved.bytes.span.extracting(offset...))
+  }
+}

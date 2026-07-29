@@ -1,0 +1,16 @@
+diff --git a/lldb/test/API/commands/watchpoints/multiple_hits/TestMultipleHits.py b/lldb/test/API/commands/watchpoints/multiple_hits/TestMultipleHits.py
+--- a/lldb/test/API/commands/watchpoints/multiple_hits/TestMultipleHits.py
++++ b/lldb/test/API/commands/watchpoints/multiple_hits/TestMultipleHits.py
+@@ -36,5 +36,12 @@ class MultipleHitsTestCase(TestBase):
+         frame = thread.GetFrameAtIndex(0)
+         self.assertTrue(frame and frame.IsValid(), "Frame is valid")
+
++        error = lldb.SBError()
++        capacity = process.GetNumSupportedHardwareWatchpoints(error)
++        self.assertSuccess(error)
++        self.assertGreater(capacity, 0)
++        if capacity < 2:
++            self.skipTest("simultaneous hits require two hardware watchpoints")
++
+         buf = frame.FindValue("buf", lldb.eValueTypeVariableGlobal)
+         self.assertTrue(buf and buf.IsValid(), "buf is valid")

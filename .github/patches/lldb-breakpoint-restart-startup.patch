@@ -1,0 +1,31 @@
+diff --git a/lldb/test/API/functionalities/breakpoint/breakpoint_set_restart/TestBreakpointSetRestart.py b/lldb/test/API/functionalities/breakpoint/breakpoint_set_restart/TestBreakpointSetRestart.py
+--- a/lldb/test/API/functionalities/breakpoint/breakpoint_set_restart/TestBreakpointSetRestart.py
++++ b/lldb/test/API/functionalities/breakpoint/breakpoint_set_restart/TestBreakpointSetRestart.py
+@@ -21,11 +21,26 @@ class BreakpointSetRestart(TestBase):
+         target = self.dbg.CreateTarget(exe)
+         self.assertTrue(target, VALID_TARGET)
+ 
+-        self.dbg.SetAsync(True)
++        # Finish loader initialization before testing breakpoint insertion.
++        # An interrupt racing a loader stop is legitimately queued for the
++        # next resume by RSP; that is not a breakpoint-insertion failure.
++        entry = target.BreakpointCreateByName("main")
++        self.assertEqual(entry.GetNumLocations(), 1, VALID_BREAKPOINT)
++        self.dbg.SetAsync(False)
+         process = target.LaunchSimple(None, None, self.get_process_working_directory())
+         self.assertTrue(process, PROCESS_IS_VALID)
++        self.assertState(process.GetState(), lldb.eStateStopped)
++        self.assertEqual(
++            process.GetSelectedThread().GetStopReason(),
++            lldb.eStopReasonBreakpoint,
++        )
++        self.assertTrue(target.BreakpointDelete(entry.GetID()))
+ 
+         event = lldb.SBEvent()
++        while self.dbg.GetListener().GetNextEvent(event):
++            pass
++        self.dbg.SetAsync(True)
++        self.assertSuccess(process.Continue())
+         # Wait for inferior to transition to running state
+         while self.dbg.GetListener().WaitForEvent(2, event):
+             if lldb.SBProcess.GetStateFromEvent(event) == lldb.eStateRunning:

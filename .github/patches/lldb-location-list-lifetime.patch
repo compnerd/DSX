@@ -1,0 +1,9 @@
+--- a/lldb/test/API/functionalities/location-list-lookup/main.cpp
++++ b/lldb/test/API/functionalities/location-list-lookup/main.cpp
+@@ -18,4 +18,6 @@
+ void Foo::bar(char **argv) {
+   std::printf("%p %p\n", argv, this);
++  // Keep this live across printf without extending the range past abort.
++  asm volatile("" : : "r"(this));
+   std::abort(); /// 'this' should be still accessible
+ }

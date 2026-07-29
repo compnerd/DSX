@@ -1,0 +1,37 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/make/Makefile.rules b/lldb/packages/Python/lldbsuite/test/make/Makefile.rules
+--- a/lldb/packages/Python/lldbsuite/test/make/Makefile.rules
++++ b/lldb/packages/Python/lldbsuite/test/make/Makefile.rules
+@@ -297,3 +297,5 @@
+ ifeq "$(MAKE_DEBUG_NAMES)" "YES"
+-	CFLAGS += -gpubnames
++	# With DWARF 4 defaults, -gpubnames emits .debug_pubnames instead.
++	# The debug_names variant requires the DWARF 5 accelerator table.
++	CFLAGS += -gdwarf-5 -gpubnames
+ endif
+diff --git a/lldb/test/API/commands/statistics/basic/TestStats.py b/lldb/test/API/commands/statistics/basic/TestStats.py
+--- a/lldb/test/API/commands/statistics/basic/TestStats.py
++++ b/lldb/test/API/commands/statistics/basic/TestStats.py
+@@ -594,7 +594,10 @@
+         self.build(dictionary=da, debug_info=["dwo", "debug_names"])
+         self.addTearDownCleanup(dictionary=da)
+         exe = self.getBuildArtifact("a.out")
+-        target = self.createTestTarget(file_path=exe)
++        # Count only the fixture's two CUs, independent of platform libraries.
++        # Nothing in this test launches the target or uses its dependencies.
++        target = self.createTestTarget(file_path=exe,
++                                       load_dependent_modules=False)
+         debug_stats = self.get_stats()
+ 
+         # 1) 2 DWO files available but none loaded yet
+@@ -643,7 +646,10 @@
+         self.build(dictionary=da, debug_info=["dwp", "debug_names"])
+         self.addTearDownCleanup(dictionary=da)
+         exe = self.getBuildArtifact("a.out")
+-        target = self.createTestTarget(file_path=exe)
++        # Count only the fixture's two CUs, independent of platform libraries.
++        # Nothing in this test launches the target or uses its dependencies.
++        target = self.createTestTarget(file_path=exe,
++                                       load_dependent_modules=False)
+         debug_stats = self.get_stats()
+ 
+         # Initially: 2 DWO files available but none loaded yet

@@ -1,0 +1,338 @@
+# Copyright © 2026 Saleem Abdulrasool <compnerd@compnerd.org>. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+name: LLDB target
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: Target matrix record (JSON)
+        required: true
+        type: string
+      swift:
+        description: Swift matrix record (JSON)
+        required: true
+        type: string
+      shards:
+        description: Selected shard records (JSON)
+        required: true
+        type: string
+      python:
+        required: true
+        type: string
+      llvm:
+        description: Resolved LLVM revision
+        required: true
+        type: string
+      llvm_revision:
+        default: ''
+        type: string
+      lldb_run:
+        default: ''
+        type: string
+      fail_fast:
+        default: false
+        type: boolean
+      trace:
+        default: false
+        type: boolean
+      timeout:
+        default: '600'
+        type: string
+
+env:
+  PYTHON_VERSION: ${{ inputs.python }}
+  # Test the runtime's ABI, including native TLS (introduced in API 29).
+  # This does not change DSX's deployment minimum.
+  ANDROID_API: '30'
+
+jobs:
+  tests:
+    name: ${{ matrix.shard.name }}
+    runs-on: ${{ fromJSON(inputs.target).compatibilityRunner || fromJSON(inputs.target).runner }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(inputs.shards) }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download LLDB
+        uses: actions/download-artifact@v8
+        with:
+          github-token: ${{ github.token }}
+          name: lldb-${{ fromJSON(inputs.target).lldb }}-${{ fromJSON(inputs.swift).build }}
+          path: .artifacts/lldb
+          run-id: ${{ inputs.lldb_run || github.run_id }}
+
+      # Matrix job results are aggregate. Check this target's artifacts before
+      # installing dependencies, without blocking on another target's failure.
+      - name: Download DSX
+        uses: actions/download-artifact@v8
+        with:
+          name: test-${{ fromJSON(inputs.target).id }}-${{ fromJSON(inputs.swift).build }}
+          path: .artifacts/dsx
+
+      - id: lldb
+        name: Select LLDB revision
+        shell: pwsh
+        run: |
+          $revision = "${{ inputs.llvm_revision }}"
+          $manifest = ".artifacts/lldb/lldb-revision.txt"
+          if (Test-Path -LiteralPath $manifest -PathType Leaf) {
+            $built = (Get-Content -LiteralPath $manifest -Raw).Trim()
+            if ($revision -and $revision -ne $built) {
+              throw "LLVM revision $revision differs from artifact revision $built"
+            }
+            $revision = $built
+          }
+          if (!$revision) {
+            if ("${{ inputs.lldb_run }}") {
+              throw "llvm_revision is required for an LLDB artifact without a manifest"
+            }
+            $revision = "${{ inputs.llvm }}"
+          }
+          "revision=$revision" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Checkout LLDB tests
+        uses: actions/checkout@v7
+        with:
+          repository: llvm/llvm-project
+          ref: ${{ steps.lldb.outputs.revision }}
+          path: llvm-project
+          fetch-depth: 1
+          sparse-checkout: |
+            lldb
+            llvm/utils/lit
+
+      - name: Apply LLDB corrections
+        shell: pwsh
+        run: |
+          foreach ($patch in Get-ChildItem .github/patches/lldb-*.patch) {
+            git -C llvm-project apply --reverse --check $patch.FullName 2>$null
+            if ($LASTEXITCODE -ne 0) {
+              git -C llvm-project apply $patch.FullName
+              if ($LASTEXITCODE -ne 0) { throw "Unable to apply $($patch.Name)" }
+            }
+          }
+
+      - name: Install Swift
+        uses: ./.github/actions/setup-swift
+        with:
+          version: ${{ fromJSON(inputs.swift).version }}
+          build: ${{ fromJSON(inputs.swift).build }}
+          architecture: ${{ fromJSON(inputs.target).host }}
+          android: ${{ fromJSON(inputs.target).sdk == 'android' }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: llvm-project/lldb/test/requirements.txt
+
+      - name: Install LLDB test dependencies
+        shell: pwsh
+        run: |
+          if ($IsWindows -and "${{ fromJSON(inputs.target).host }}" -eq "arm64") {
+            # The runner installs native OpenSSL, but openssl-sys does not
+            # discover its nested MSVC library directory automatically.
+            $env:OPENSSL_DIR = [IO.Path]::Join($env:ProgramFiles, "OpenSSL")
+            $env:OPENSSL_INCLUDE_DIR =
+                [IO.Path]::Join($env:OPENSSL_DIR, "include")
+            $env:OPENSSL_LIB_DIR =
+                [IO.Path]::Join($env:OPENSSL_DIR, "lib", "VC", "arm64", "MD")
+            $env:OPENSSL_STATIC = "0"
+            foreach ($path in @($env:OPENSSL_INCLUDE_DIR, $env:OPENSSL_LIB_DIR)) {
+              if (!(Test-Path -LiteralPath $path -PathType Container)) {
+                throw "Missing native OpenSSL dependency: $path"
+              }
+            }
+            "OPENSSL_DIR=$env:OPENSSL_DIR" |
+                Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          python -m pip install --disable-pip-version-check `
+            -r llvm-project/lldb/test/requirements.txt 2>&1 |
+              Tee-Object "$env:RUNNER_TEMP/lldb-dependencies.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install make
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install make --yes --no-progress
+
+      - name: Extract test tools
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          tar -xzf .artifacts/lldb/lldb.tar.gz
+          tar -xzf ".artifacts/dsx/${{ fromJSON(inputs.target).id }}.tar.gz" -C .artifacts/dsx
+          echo "$GITHUB_WORKSPACE/.build/llvm/bin" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$GITHUB_WORKSPACE/.build/llvm/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Extract test tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Expand-Archive .artifacts/lldb/lldb.zip -DestinationPath . -Force
+          Expand-Archive ".artifacts/dsx/${{ fromJSON(inputs.target).id }}.zip" `
+              -DestinationPath .artifacts/dsx -Force
+          "$env:GITHUB_WORKSPACE\.build\llvm\bin" |
+              Out-File $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Refresh LLDB Python support
+        shell: pwsh
+        run: |
+          # ScriptedFrame's i386 repair is Python-only. Refresh the extracted
+          # plugin from the matching source revision, including reused LLDB
+          # artifacts, without rebuilding or modifying liblldb.
+          $files = @(Get-ChildItem .build/llvm/lib -Filter scripted_process.py `
+              -Recurse | Where-Object { $_.Directory.Name -eq 'plugins' })
+          if ($files.Count -ne 1) {
+            throw 'Expected one LLDB scripted-process plugin'
+          }
+          $source =
+              'llvm-project/lldb/examples/python/templates/scripted_process.py'
+          Copy-Item $source $files[0].FullName
+
+      - name: Authorize DSX debugging
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          llvm-project/lldb/scripts/macos-setup-codesign.sh
+          sudo /usr/sbin/DevToolsSecurity --enable
+          # Developer mode still requires _developer membership for task access
+          # to fixtures without get-task-allow (for example BSDArchives).
+          sudo /usr/sbin/dseditgroup -o edit -a "$(id -un)" -t user _developer
+          /usr/sbin/dseditgroup -o checkmember -m "$(id -un)" _developer
+          # Hosted runners cannot answer SecurityAgent's password prompt.
+          # Check the existing developer group without interactive authentication;
+          # preserve the same-user taskport restriction and all other rule fields.
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          authorization="$RUNNER_TEMP/dsx-taskport.plist"
+          security authorizationdb read system.privilege.taskport \
+            > "$authorization"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :class' \
+            "$authorization")" = user
+          test "$(/usr/libexec/PlistBuddy -c 'Print :group' \
+            "$authorization")" = _developer
+          /usr/libexec/PlistBuddy -c 'Set :authenticate-user false' \
+            "$authorization"
+          sudo security authorizationdb write system.privilege.taskport \
+            < "$authorization"
+          entitlements="$RUNNER_TEMP/dsx-entitlements.plist"
+          resources=llvm-project/lldb/tools/debugserver/resources
+          cp "$resources/debugserver-macosx-entitlements.plist" "$entitlements"
+          # The lifecycle probe also launches DSX as the debuggee.
+          /usr/libexec/PlistBuddy \
+            -c 'Add :com.apple.security.get-task-allow bool true' "$entitlements"
+          codesign --force --sign lldb_codesign \
+            --entitlements "$entitlements" \
+            ".artifacts/dsx/${{ fromJSON(inputs.target).id }}/dsx"
+          codesign --verify --strict ".artifacts/dsx/${{ fromJSON(inputs.target).id }}/dsx"
+          codesign --display --entitlements - \
+            ".artifacts/dsx/${{ fromJSON(inputs.target).id }}/dsx"
+          /usr/sbin/DevToolsSecurity --status
+          security authorizationdb read system.privilege.taskport
+
+      - name: Start Android emulator
+        if: fromJSON(inputs.target).sdk == 'android'
+        shell: bash
+        run: |
+          set -euo pipefail
+          avd="$RUNNER_TEMP/android-avd"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          avdmanager="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          emulator="$ANDROID_HOME/emulator/emulator"
+          mkdir -p "$avd"
+          export ANDROID_AVD_HOME="$avd"
+          echo "ANDROID_AVD_HOME=$avd" >> "$GITHUB_ENV"
+          sudo chmod 666 /dev/kvm
+          "$sdkmanager" 'platform-tools' 'emulator' \
+            "system-images;android-$ANDROID_API;google_apis;x86_64"
+          echo no | "$avdmanager" create avd --force --name dsx \
+            --package "system-images;android-$ANDROID_API;google_apis;x86_64"
+          "$emulator" -list-avds | grep -Fx dsx
+          "$emulator" -avd dsx -no-window -no-audio -no-boot-anim \
+            -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          echo "ANDROID_EMULATOR_PID=$!" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Validate LLDB harness integration
+        shell: pwsh
+        env:
+          LLVM_SOURCE: llvm-project
+        run: python -m unittest discover -s .github/scripts/tests -v
+
+      - name: Run LLDB API tests against DSX
+        shell: pwsh
+        env:
+          TESTS: ${{ matrix.shard.tests }}
+          LLDB_TIMEOUT: ${{ inputs.timeout || '600' }}
+        run: |
+          [string[]] $options = @()
+          if ("${{ fromJSON(inputs.target).sdk }}" -eq "android") {
+            $options += @("--android", "--android-api", "$env:ANDROID_API")
+          }
+          if ("${{ fromJSON(inputs.target).platform }}" -in @("remote-linux", "remote-android")) {
+            $options += @("--exclusions", ".github/scripts/lldb-linux.exclusions")
+          }
+          if ("${{ inputs.fail_fast }}" -eq "true") {
+            $options += "--fail-fast"
+          }
+          if ("${{ inputs.trace }}" -eq "true") {
+            $options += "--trace"
+          }
+          python .github/scripts/run-lldb-tests.py `
+            --arch "${{ fromJSON(inputs.target).arch }}" `
+            --dsx ".artifacts/dsx/${{ fromJSON(inputs.target).id }}/dsx${{ runner.os == 'Windows' && '.exe' || '' }}" `
+            --platform "${{ fromJSON(inputs.target).platform }}" `
+            --source llvm-project `
+            --tests "$env:TESTS" `
+            --tools .build/llvm/bin `
+            --triple "${{ fromJSON(inputs.target).triple }}" `
+            --output "$env:RUNNER_TEMP/dsx-lldb" `
+            --label "${{ fromJSON(inputs.target).name }}/${{ matrix.shard.name }}/${{ fromJSON(inputs.swift).build }}" `
+            --timeout "$env:LLDB_TIMEOUT" `
+            @options
+
+      - name: Stop Android emulator
+        if: always() && fromJSON(inputs.target).sdk == 'android'
+        shell: bash
+        run: |
+          "$ANDROID_HOME/platform-tools/adb" emu kill || true
+          kill "$ANDROID_EMULATOR_PID" 2>/dev/null || true
+
+      - name: Record incomplete run
+        if: always()
+        shell: pwsh
+        run: |
+          python .github/scripts/lldb_results.py "$env:RUNNER_TEMP/dsx-lldb" `
+            --finalize "${{ fromJSON(inputs.target).name }}/${{ matrix.shard.name }}/${{ fromJSON(inputs.swift).build }}" `
+            --llvm "${{ steps.lldb.outputs.revision }}"
+
+      - name: Upload shard summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lldb-summary-${{ fromJSON(inputs.target).id }}-${{ matrix.shard.name }}-${{ fromJSON(inputs.swift).build }}
+          path: ${{ runner.temp }}/dsx-lldb/summary.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload LLDB results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lldb-results-${{ fromJSON(inputs.target).id }}-${{ matrix.shard.name }}-${{ fromJSON(inputs.swift).build }}
+          path: |
+            ${{ runner.temp }}/emulator.log
+            ${{ runner.temp }}/lldb-dependencies.log
+            ${{ runner.temp }}/dsx-lldb/*.json
+            ${{ runner.temp }}/dsx-lldb/*.md
+            ${{ runner.temp }}/dsx-lldb/*.log
+            ${{ runner.temp }}/dsx-lldb/lldb-test-build.noindex/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7

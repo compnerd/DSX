@@ -1,0 +1,25 @@
+diff --git a/lldb/test/API/lang/cpp/member-and-local-vars-with-same-name/TestMembersAndLocalsWithSameName.py b/lldb/test/API/lang/cpp/member-and-local-vars-with-same-name/TestMembersAndLocalsWithSameName.py
+--- a/lldb/test/API/lang/cpp/member-and-local-vars-with-same-name/TestMembersAndLocalsWithSameName.py
++++ b/lldb/test/API/lang/cpp/member-and-local-vars-with-same-name/TestMembersAndLocalsWithSameName.py
+@@ -216,15 +216,18 @@
+         self.assertEqual(val.GetValueAsUnsigned(), 778899)
+ 
+     def enable_expression_log(self):
+-        log_file = self.getBuildArtifact("expr.log")
++        # Another enabled category can keep the channel's stream open after
++        # disabling expr. A distinct file isolates each expression even then.
++        log_file = self.getBuildArtifact(f"expr-{len(self.log_files)}.log")
++        self.expression_log = log_file
++        self.log_files.append(log_file)
+         self.runCmd("log enable  -f '%s' lldb expr" % (log_file))
+ 
+     def disable_expression_log_and_check_for_locals(self, variables):
+-        log_file = self.getBuildArtifact("expr.log")
+         self.runCmd("log disable lldb expr")
+         local_var_regex = re.compile(r".*__lldb_local_vars::(.*);")
+         matched = []
+-        with open(log_file, "r") as log:
++        with open(self.expression_log, "r") as log:
+             for line in log:
+                 if line.find("LLDB_BODY_START") != -1:
+                     break

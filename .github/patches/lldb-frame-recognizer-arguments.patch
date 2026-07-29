@@ -1,0 +1,41 @@
+--- a/lldb/test/API/commands/frame/recognizer/recognizer.py
++++ b/lldb/test/API/commands/frame/recognizer/recognizer.py
+@@ -3,11 +3,27 @@
+ import lldb
+
+
++def argument(frame, index):
++    target = frame.GetThread().GetProcess().GetTarget()
++    architecture = target.GetTriple().split("-")[0]
++    if architecture in ("i386", "i486", "i586", "i686"):
++        # These C functions use cdecl: arguments start at the caller's SP.
++        # CFA stays valid at entry and after the callee's prologue.
++        address = frame.GetCFA() + (index - 1) * target.GetAddressByteSize()
++        expression = "*(int *)0x%x" % address
++    else:
++        expression = "$arg%d" % index
++    value = frame.EvaluateExpression(expression)
++    if value.GetError().Fail():
++        raise RuntimeError(value.GetError().GetCString())
++    return value.signed
++
++
+ class MyFrameRecognizer:
+     def get_recognized_arguments(self, frame):
+         if frame.name == "foo":
+-            arg1 = frame.EvaluateExpression("$arg1").signed
+-            arg2 = frame.EvaluateExpression("$arg2").signed
++            arg1 = argument(frame, 1)
++            arg2 = argument(frame, 2)
+             val1 = (
+                 frame.GetThread()
+                 .GetProcess()
+@@ -22,7 +38,7 @@
+             )
+             return [val1, val2]
+         elif frame.name == "bar":
+-            arg1 = frame.EvaluateExpression("$arg1").signed
++            arg1 = argument(frame, 1)
+             val1 = (
+                 frame.GetThread()
+                 .GetProcess()

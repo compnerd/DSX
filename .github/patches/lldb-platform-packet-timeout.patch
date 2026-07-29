@@ -1,0 +1,47 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/configuration.py b/lldb/packages/Python/lldbsuite/test/configuration.py
+--- a/lldb/packages/Python/lldbsuite/test/configuration.py
++++ b/lldb/packages/Python/lldbsuite/test/configuration.py
+@@ -67,6 +67,10 @@ dwarf_version = 0
+ # Any overridden settings.
+ settings = []
+ 
++# Apply the same transport allowance before platform connection and after
++# each test resets the debugger settings.
++packet_timeout = 60
++
+ # Path to the FileCheck testing tool. Not optional.
+ filecheck = None
+ 
+diff --git a/lldb/packages/Python/lldbsuite/test/dotest.py b/lldb/packages/Python/lldbsuite/test/dotest.py
+--- a/lldb/packages/Python/lldbsuite/test/dotest.py
++++ b/lldb/packages/Python/lldbsuite/test/dotest.py
+@@ -1142,5 +1142,16 @@ def run_suite():
+             exitTestSuite(1)
+         if configuration.lldb_platform_url:
++            # PlatformRemoteGDBServer snapshots the timeout at connection.
++            # TestBase.setUp runs later and cannot update that connection.
++            debugger = lldb.SBDebugger.Create(False)
++            error = lldb.SBDebugger.SetInternalVariable(
++                "plugin.process.gdb-remote.packet-timeout",
++                str(configuration.packet_timeout), debugger.GetInstanceName()
++            )
++            lldb.SBDebugger.Destroy(debugger)
++            if error.Fail():
++                raise RuntimeError(str(error))
++
+             # We must connect to a remote platform if a LLDB platform URL was
+             # specified
+             print(
+diff --git a/lldb/packages/Python/lldbsuite/test/lldbtest.py b/lldb/packages/Python/lldbsuite/test/lldbtest.py
+--- a/lldb/packages/Python/lldbsuite/test/lldbtest.py
++++ b/lldb/packages/Python/lldbsuite/test/lldbtest.py
+@@ -888,7 +888,8 @@ class TestBase(Base):
+             # pass just because Clang thinks it has a fix-it.
+             "settings set target.auto-apply-fixits false",
+             # Testsuite runs in parallel and the host can have also other load.
+-            "settings set plugin.process.gdb-remote.packet-timeout 60",
++            "settings set plugin.process.gdb-remote.packet-timeout "
++            + str(configuration.packet_timeout),
+             # LLDB-internal utility expressions can take very long when the
+             # host is under heavy load.
+             "settings set target.process.utility-expression-timeout 600",

@@ -1,0 +1,30 @@
+--- a/lldb/test/API/functionalities/process_save_core_minidump/TestProcessSaveCoreMinidump.py
++++ b/lldb/test/API/functionalities/process_save_core_minidump/TestProcessSaveCoreMinidump.py
+@@ -278,12 +278,24 @@
+             self.assertTrue(error.Success(), error.GetCString())
+             error = process.GetMemoryRegionInfo(expected_sp, expected_region)
+             self.assertTrue(error.Success(), error.GetCString())
+-            self.assertEqual(
+-                expected_region.GetRegionBase(), saved_region.GetRegionBase()
+-            )
++            # Optional mapping metadata can describe the original full mapping.
++            # Without it, the dump describes only the saved stack and red zone.
++            start = expected_sp - target.GetStackRedZoneSize()
++            self.assertGreaterEqual(saved_region.GetRegionBase(),
++                                    expected_region.GetRegionBase())
++            self.assertLessEqual(saved_region.GetRegionBase(), start)
+             self.assertEqual(
+                 expected_region.GetRegionEnd(), saved_region.GetRegionEnd()
+             )
++            size = min(256, expected_region.GetRegionEnd() - start)
++            expected = process.ReadMemory(start, size, error)
++            self.assertTrue(error.Success(), error.GetCString())
++            saved = core_process.ReadMemory(start, size, error)
++            self.assertTrue(error.Success(), error.GetCString())
++            self.assertEqual(saved, expected)
++            core_process.ReadMemory(start - 1, 1, error)
++            self.assertTrue(error.Fail(),
++                            "Stack-only dump includes memory below the red zone")
+
+         finally:
+             self.assertTrue(self.dbg.DeleteTarget(target))

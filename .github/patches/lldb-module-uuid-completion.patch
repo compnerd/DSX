@@ -1,0 +1,16 @@
+diff --git a/lldb/test/API/functionalities/completion/TestCompletion.py b/lldb/test/API/functionalities/completion/TestCompletion.py
+--- a/lldb/test/API/functionalities/completion/TestCompletion.py
++++ b/lldb/test/API/functionalities/completion/TestCompletion.py
+@@ -860,8 +860,9 @@
+     def test_target_modules_load_dash_u(self):
+         self.build()
+         target = self.dbg.CreateTarget(self.getBuildArtifact("a.out"))
++        # Dependencies can be loaded when creating the target. Completion
++        # includes their UUIDs, not only that of the executable.
+-        self.complete_from_to(
+-            "target modules load -u ", [target.GetModuleAtIndex(0).GetUUIDString()]
+-        )
++        uuids = [module.GetUUIDString() for module in target.modules]
++        self.completions_match("target modules load -u ", uuids)
+ 
+     def test_complete_breakpoint_with_ids(self):

@@ -1,0 +1,14 @@
+diff --git a/lldb/packages/Python/lldbsuite/test/make/Android.rules b/lldb/packages/Python/lldbsuite/test/make/Android.rules
+--- a/lldb/packages/Python/lldbsuite/test/make/Android.rules
++++ b/lldb/packages/Python/lldbsuite/test/make/Android.rules
+@@ -1,3 +1,10 @@
++# Some tests replace LD_LIBRARY_PATH. Keep deployed runtimes discoverable
++# without exporting LDFLAGS (recursive make would inherit the parent test's
++# libraries while building those libraries' prerequisites).
++ifneq ($(LLDB_ANDROID_RUNTIME),)
++LDFLAGS += -Wl,-rpath,$(LLDB_ANDROID_RUNTIME)
++endif
++
+ NDK_ROOT := $(shell dirname $(CC))/../../../../..
+
+ ifeq "$(HOST_OS)" "Linux"

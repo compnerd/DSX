@@ -1,0 +1,70 @@
+diff --git a/lldb/test/API/lang/cpp/class-template-non-type-parameter-pack/Makefile b/lldb/test/API/lang/cpp/class-template-non-type-parameter-pack/Makefile
+--- a/lldb/test/API/lang/cpp/class-template-non-type-parameter-pack/Makefile
++++ b/lldb/test/API/lang/cpp/class-template-non-type-parameter-pack/Makefile
+@@ -1,3 +1,10 @@
+ CXX_SOURCES := main.cpp
+ 
++ifeq ($(OS),Windows_NT)
++# These tests evaluate globals without launching a process. LLDB's offline PE
++# reader does not synthesize a section's zero-filled virtual tail. Keep zeros
++# file-backed until LLDB handles that tail. Other fixtures retain BSS coverage.
++CXXFLAGS_EXTRAS += -fno-zero-initialized-in-bss
++endif
++
+ include Makefile.rules
+diff --git a/lldb/test/API/lang/cpp/class-template-type-parameter-pack/Makefile b/lldb/test/API/lang/cpp/class-template-type-parameter-pack/Makefile
+--- a/lldb/test/API/lang/cpp/class-template-type-parameter-pack/Makefile
++++ b/lldb/test/API/lang/cpp/class-template-type-parameter-pack/Makefile
+@@ -1,3 +1,10 @@
+ CXX_SOURCES := main.cpp
+ 
++ifeq ($(OS),Windows_NT)
++# These tests evaluate globals without launching a process. LLDB's offline PE
++# reader does not synthesize a section's zero-filled virtual tail. Keep zeros
++# file-backed until LLDB handles that tail. Other fixtures retain BSS coverage.
++CXXFLAGS_EXTRAS += -fno-zero-initialized-in-bss
++endif
++
+ include Makefile.rules
+diff --git a/lldb/test/API/lang/cpp/complete-type-check/Makefile b/lldb/test/API/lang/cpp/complete-type-check/Makefile
+--- a/lldb/test/API/lang/cpp/complete-type-check/Makefile
++++ b/lldb/test/API/lang/cpp/complete-type-check/Makefile
+@@ -1,3 +1,10 @@
+ CXX_SOURCES := main.cpp
+ 
++ifeq ($(OS),Windows_NT)
++# These tests evaluate globals without launching a process. LLDB's offline PE
++# reader does not synthesize a section's zero-filled virtual tail. Keep zeros
++# file-backed until LLDB handles that tail. Other fixtures retain BSS coverage.
++CXXFLAGS_EXTRAS += -fno-zero-initialized-in-bss
++endif
++
+ include Makefile.rules
+diff --git a/lldb/test/API/lang/cpp/crtp/Makefile b/lldb/test/API/lang/cpp/crtp/Makefile
+--- a/lldb/test/API/lang/cpp/crtp/Makefile
++++ b/lldb/test/API/lang/cpp/crtp/Makefile
+@@ -1,3 +1,10 @@
+ CXX_SOURCES := main.cpp
+ 
++ifeq ($(OS),Windows_NT)
++# These tests evaluate globals without launching a process. LLDB's offline PE
++# reader does not synthesize a section's zero-filled virtual tail. Keep zeros
++# file-backed until LLDB handles that tail. Other fixtures retain BSS coverage.
++CXXFLAGS_EXTRAS += -fno-zero-initialized-in-bss
++endif
++
+ include Makefile.rules
+diff --git a/lldb/test/API/lang/cpp/typedef-to-outer-fwd/Makefile b/lldb/test/API/lang/cpp/typedef-to-outer-fwd/Makefile
+--- a/lldb/test/API/lang/cpp/typedef-to-outer-fwd/Makefile
++++ b/lldb/test/API/lang/cpp/typedef-to-outer-fwd/Makefile
+@@ -1,3 +1,10 @@
+ CXX_SOURCES := lib.cpp main.cpp
+ 
++ifeq ($(OS),Windows_NT)
++# These tests evaluate globals without launching a process. LLDB's offline PE
++# reader does not synthesize a section's zero-filled virtual tail. Keep zeros
++# file-backed until LLDB handles that tail. Other fixtures retain BSS coverage.
++CXXFLAGS_EXTRAS += -fno-zero-initialized-in-bss
++endif
++
+ include Makefile.rules
