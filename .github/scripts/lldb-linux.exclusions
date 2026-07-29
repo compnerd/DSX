@@ -1,0 +1,5 @@
+xfail
+TestMultiBreakpoint\.test_multi_breakpoint$
+
+skip
+^TestThreadSpecificBpPlusCondition\.py$

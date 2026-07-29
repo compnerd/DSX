@@ -1,0 +1,254 @@
+name: Install Swift
+description: Install the selected swift.org toolchain
+
+inputs:
+  version:
+    description: Swift release branch
+    required: true
+  build:
+    description: Swift snapshot identifier
+    required: true
+  architecture:
+    description: Host architecture
+    required: true
+  android:
+    description: Install the Android Swift SDK
+    required: false
+    default: 'false'
+  target:
+    description: Target triple
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Install Swift
+      if: runner.os != 'Linux'
+      # v0.4.1
+      uses: compnerd/gha-setup-swift@397094e75494a93fa8d81db0268dbc8f5d6cf7c6
+      with:
+        source: swift.org
+        swift-version: ${{ inputs.version }}
+        swift-build: ${{ inputs.build }}
+        build_arch: ${{ inputs.architecture }}
+        cache: true
+        installer-args: >-
+          OptionsInstallAndroidPlatform=${{ inputs.android == 'true' && '1' || '0' }}
+          OptionsInstallAndroidSDKAMD64=${{ startsWith(inputs.target, 'x86_64-') && '1' || '0' }}
+          OptionsInstallAndroidSDKARM=${{ startsWith(inputs.target, 'armv7-') && '1' || '0' }}
+          OptionsInstallAndroidSDKARM64=${{ startsWith(inputs.target, 'aarch64-') && '1' || '0' }}
+          OptionsInstallAndroidSDKX86=${{ (startsWith(inputs.target, 'armv7-') || startsWith(inputs.target, 'i686-')) && '1' || '0' }}
+
+    - name: Configure Android Swift SDK
+      if: runner.os == 'Windows' && inputs.android == 'true'
+      shell: pwsh
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        $architecture = switch -Regex ($env:TARGET) {
+          "^aarch64-" { "aarch64"; break }
+          "^armv7-" { "armv7"; break }
+          "^i686-" { "i686"; break }
+          "^x86_64-" { "x86_64"; break }
+          default { throw "Unsupported Android target: $env:TARGET" }
+        }
+        $sdk = $env:SDKROOT.TrimEnd([IO.Path]::DirectorySeparatorChar)
+        $platform = [IO.Directory]::GetParent($sdk).Parent.Parent
+        $platforms = $platform.Parent.FullName
+        $android = [IO.Path]::Combine($platforms, "Android.platform",
+            "Developer", "SDKs", "Android.sdk")
+        $prebuilt = Get-ChildItem ([IO.Path]::Combine($env:ANDROID_NDK_HOME,
+            "toolchains", "llvm", "prebuilt")) -Directory
+        if ($prebuilt.Count -ne 1) {
+          throw "Expected one Android NDK host toolchain"
+        }
+        $swift = [IO.Path]::Combine($android, "usr", "lib", "swift")
+        $static = [IO.Path]::Combine($android, "usr", "lib", "swift_static")
+        $dynamic = [IO.Path]::Combine($swift, "android")
+        $resources = [IO.Path]::Combine($static, "android")
+        $usr = [IO.Directory]::GetParent((Get-Command swift).Source).Parent
+        $linker = [IO.Path]::Combine($resources, "static-stdlib-args.lnk")
+        if (![IO.File]::Exists($linker)) {
+          $source = [IO.Path]::Combine($usr.FullName, "lib", "swift_static",
+              "android", "static-stdlib-args.lnk")
+          if ([IO.File]::Exists($source)) {
+            [IO.File]::Copy($source, $linker)
+          } else {
+            [IO.File]::WriteAllLines($linker, @(
+              "-ldl",
+              "-llog",
+              "-lswiftCore",
+              "-lswift_RegexParser",
+              "-lstdc++",
+              "-lm",
+              "-Xlinker",
+              "-export-dynamic",
+              "-Xlinker",
+              "--exclude-libs",
+              "-Xlinker",
+              "ALL"
+            ))
+          }
+        }
+        $shims = [IO.Path]::Combine($static, "shims")
+        if (![IO.Directory]::Exists($shims)) {
+          $source = Get-Item ([IO.Path]::Combine($swift, "shims"))
+          Copy-Item $source.FullName $shims -Recurse
+        }
+        foreach ($name in "libcxxshim.h", "libcxxshim.modulemap", "libcxxstdlibshim.h") {
+          $target = [IO.Path]::Combine($resources, $name)
+          if (![IO.File]::Exists($target)) {
+            $source = [IO.Path]::Combine($dynamic, $name)
+            if (![IO.File]::Exists($source)) {
+              throw "Android Swift shim is missing: $name"
+            }
+            [IO.File]::Copy($source, $target)
+          }
+        }
+        $overlay = [IO.Path]::Combine($dynamic, $architecture)
+        $runtime = [IO.Path]::Combine($resources, $architecture)
+        [IO.Directory]::CreateDirectory($runtime) | Out-Null
+        foreach ($name in "android.modulemap", "SwiftAndroidNDK.h",
+            "SwiftBionic.h") {
+          $target = [IO.Path]::Combine($runtime, $name)
+          if (![IO.File]::Exists($target)) {
+            $source = [IO.Path]::Combine($overlay, $name)
+            if (![IO.File]::Exists($source)) {
+              $source = Get-ChildItem $dynamic -Directory |
+                  ForEach-Object {
+                    [IO.Path]::Combine($_.FullName, $name)
+                  } |
+                  Where-Object { [IO.File]::Exists($_) } |
+                  Select-Object -First 1
+            }
+            if (!$source -or ![IO.File]::Exists($source)) {
+              throw "Android Swift overlay is missing: $architecture/$name"
+            }
+            [IO.File]::Copy($source, $target)
+          }
+        }
+        foreach ($name in "libswiftCore.a", "libswiftAndroid.a",
+            "libswiftSynchronization.a", "libswift_RegexParser.a") {
+          if (![IO.File]::Exists([IO.Path]::Combine($runtime, $name))) {
+            throw "Android Swift runtime is missing: $architecture/$name"
+          }
+        }
+        $startup = [IO.Path]::Combine($runtime, "swiftrt.o")
+        if (![IO.File]::Exists($startup)) {
+          $source = [IO.Path]::Combine($overlay, "swiftrt.o")
+          if (![IO.File]::Exists($source)) {
+            throw "Android Swift startup object is missing for $architecture"
+          }
+          [IO.File]::Copy($source, $startup)
+        }
+        $sysroot = [IO.Path]::Combine($prebuilt.FullName, "sysroot")
+        $targets = [ordered]@{}
+        $targets[$env:TARGET] = [ordered]@{
+          sdkRootPath = $sysroot
+          swiftResourcesPath = $swift
+          swiftStaticResourcesPath = $static
+          includeSearchPaths = @(
+            [IO.Path]::Combine($android, "usr", "include")
+          )
+          librarySearchPaths = @(
+            $runtime
+          )
+        }
+        $metadata = [ordered]@{
+          schemaVersion = "4.0"
+          targetTriples = $targets
+        }
+        $info = [ordered]@{
+          schemaVersion = "1.0"
+          artifacts = [ordered]@{
+            android = [ordered]@{
+              version = "1.0.0"
+              type = "swiftSDK"
+              variants = @(
+                [ordered]@{
+                  path = "android"
+                  supportedTriples = @(
+                    "aarch64-unknown-windows-msvc",
+                    "x86_64-unknown-windows-msvc"
+                  )
+                }
+              )
+            }
+          }
+        }
+        $store = [IO.Path]::Combine($env:RUNNER_TEMP, "swift-sdks")
+        $bundle = [IO.Path]::Combine($store, "android.artifactbundle")
+        $variant = [IO.Path]::Combine($bundle, "android")
+        [IO.Directory]::CreateDirectory($variant) | Out-Null
+        $encoding = [Text.UTF8Encoding]::new($false)
+        $path = [IO.Path]::Combine($bundle, "info.json")
+        $contents = $info | ConvertTo-Json -Depth 8
+        [IO.File]::WriteAllText($path, $contents, $encoding)
+        $path = [IO.Path]::Combine($variant, "swift-sdk.json")
+        $contents = $metadata | ConvertTo-Json -Depth 8
+        [IO.File]::WriteAllText($path, $contents, $encoding)
+        "ANDROID_NDK_ROOT=$env:ANDROID_NDK_HOME" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+        "ANDROID_SWIFT_SDKS_PATH=$store" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+    - name: Locate Linux toolchain
+      if: runner.os == 'Linux'
+      id: linux
+      shell: bash
+      env:
+        ARCHITECTURE: ${{ inputs.architecture }}
+        SWIFT_BUILD: ${{ inputs.build }}
+        SWIFT_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        source /etc/os-release
+        case "$ARCHITECTURE" in
+          amd64)
+            platform="ubuntu${VERSION_ID//./}"
+            suffix="ubuntu$VERSION_ID"
+            ;;
+          arm64)
+            platform="ubuntu${VERSION_ID//./}-aarch64"
+            suffix="ubuntu$VERSION_ID-aarch64"
+            ;;
+          *)
+            echo "::error::unsupported Linux host architecture: $ARCHITECTURE"
+            exit 1
+            ;;
+        esac
+        root="$RUNNER_TOOL_CACHE/swift/$SWIFT_BUILD/$ARCHITECTURE"
+        base="https://download.swift.org/$SWIFT_VERSION/$platform"
+        url="$base/swift-$SWIFT_BUILD/swift-$SWIFT_BUILD-$suffix.tar.gz"
+        key="swift-toolchain-directory-linux-$ARCHITECTURE"
+        key="$key-$SWIFT_VERSION-$SWIFT_BUILD"
+        echo "key=$key" >> "$GITHUB_OUTPUT"
+        echo "root=$root" >> "$GITHUB_OUTPUT"
+        echo "url=$url" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Linux toolchain
+      if: runner.os == 'Linux'
+      id: linux-cache
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.linux.outputs.root }}
+        key: ${{ steps.linux.outputs.key }}
+
+    - name: Install Linux toolchain
+      if: runner.os == 'Linux' && steps.linux-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        ROOT: ${{ steps.linux.outputs.root }}
+        URL: ${{ steps.linux.outputs.url }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$ROOT"
+        curl --fail --location --silent --show-error "$URL" |
+          tar -xz --strip-components=1 -C "$ROOT"
+
+    - name: Select Linux toolchain
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        ROOT: ${{ steps.linux.outputs.root }}
+      run: |
+        echo "$ROOT/usr/bin" >> "$GITHUB_PATH"
+        "$ROOT/usr/bin/swift" --version

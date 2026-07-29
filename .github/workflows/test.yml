@@ -1,0 +1,597 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: ${{ format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: true
+
+env:
+  LLVM_CAS_LIMIT: 4294967296
+  LLVM_VERSION: main
+  PYTHON_VERSION: '3.11'
+  SWIFT_CAS_LIMIT: 536870912
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    outputs:
+      compatibility: ${{ steps.versions.outputs.compatibility }}
+      hosts: ${{ steps.versions.outputs.hosts }}
+      llvm: ${{ steps.llvm.outputs.revision }}
+      swift: ${{ steps.versions.outputs.swift }}
+      targets: ${{ steps.versions.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: versions
+        shell: bash
+        run: |
+          echo "compatibility=$(jq -c '[.targets[] | select(.compatibility)]' .github/matrix.json)" >> "$GITHUB_OUTPUT"
+          echo "hosts=$(jq -c .hosts .github/matrix.json)" >> "$GITHUB_OUTPUT"
+          echo "swift=$(jq -c .swift .github/matrix.json)" >> "$GITHUB_OUTPUT"
+          echo "targets=$(jq -c .targets .github/matrix.json)" >> "$GITHUB_OUTPUT"
+      - id: llvm
+        shell: bash
+        run: |
+          revision=$(git ls-remote https://github.com/llvm/llvm-project.git \
+            "$LLVM_VERSION" | awk 'NR == 1 { print $1 }')
+          test -n "$revision"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+  lldb:
+    name: LLDB · ${{ matrix.host.name }} · ${{ matrix.swift.build }}
+    needs: versions
+    runs-on: ${{ matrix.host.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ${{ fromJSON(needs.versions.outputs.swift) }}
+        host: ${{ fromJSON(needs.versions.outputs.hosts) }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Checkout LLVM
+        uses: actions/checkout@v7
+        with:
+          repository: llvm/llvm-project
+          ref: ${{ needs.versions.outputs.llvm }}
+          path: llvm-project
+          fetch-depth: 1
+          sparse-checkout: |
+            clang
+            cmake
+            libc
+            lld
+            lldb
+            libunwind
+            llvm
+            third-party
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Swift
+        uses: ./.github/actions/setup-swift
+        with:
+          version: ${{ matrix.swift.version }}
+          build: ${{ matrix.swift.build }}
+          architecture: ${{ matrix.host.host }}
+
+      - name: Configure LLDB CAS
+        shell: pwsh
+        run: |
+          $launcher = if ($IsMacOS) {
+            $candidate = (& xcrun --find clang-cache).Trim()
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to locate clang-cache"
+            }
+            $candidate
+          } else {
+            (Get-Command clang-cache).Source
+          }
+          if (![IO.File]::Exists($launcher)) {
+            throw "Unable to locate clang-cache"
+          }
+          $path = [IO.Path]::Join("${{ github.workspace }}", ".build", "lldb-cas")
+          $prefix = "clang-cas-lldb-${{ runner.os }}-${{ runner.arch }}-${{ matrix.swift.build }}-"
+          "CLANG_CACHE_LAUNCHER=$launcher" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "LLVM_CACHE_CAS_PATH=$path" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "LLVM_CACHE_PREFIX_MAPS=${{ github.workspace }}=/^workspace" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          if (!$IsWindows) {
+            "LLVM_CACHE_BUILD_SESSION_ID=${{ github.run_id }}-${{ matrix.host.id }}" |
+                Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          "LLVM_CAS_PREFIX=$prefix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "LLVM_CAS_KEY=${prefix}${{ github.run_id }}-${{ github.run_attempt }}" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Restore LLDB CAS
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.LLVM_CACHE_CAS_PATH }}
+          key: ${{ env.LLVM_CAS_KEY }}
+          restore-keys: ${{ env.LLVM_CAS_PREFIX }}
+
+      - name: Install LLDB build dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install --yes --no-install-recommends
+          libedit-dev libncurses-dev libxml2-dev ninja-build swig
+
+      - name: Install SWIG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install swig
+
+      - name: Configure LLDB
+        if: runner.os != 'Windows'
+        shell: bash
+        run: >-
+          cmake -G Ninja -S llvm-project/llvm -B .build/llvm
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER="$(command -v clang)"
+          -DCMAKE_CXX_COMPILER="$(command -v clang++)"
+          -DCMAKE_C_COMPILER_LAUNCHER:FILEPATH="$CLANG_CACHE_LAUNCHER"
+          -DCMAKE_CXX_COMPILER_LAUNCHER:FILEPATH="$CLANG_CACHE_LAUNCHER"
+          -DLLVM_ENABLE_PROJECTS='clang;lld;lldb'
+          -DLLVM_TARGETS_TO_BUILD='AArch64;ARM;X86'
+          -DLLVM_ENABLE_ASSERTIONS=OFF
+          -DLLVM_INCLUDE_BENCHMARKS=OFF
+          -DLLVM_INCLUDE_EXAMPLES=OFF
+          -DLLVM_INCLUDE_TESTS=OFF
+          -DLLDB_INCLUDE_TESTS=ON
+          -DLLDB_ENABLE_PYTHON=ON
+          -DLLDB_USE_SYSTEM_DEBUGSERVER=${{ runner.os == 'macOS' && 'ON' || 'OFF' }}
+          -DPython3_EXECUTABLE="$(command -v python)"
+
+      - name: Configure LLDB
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $compiler = (Get-Command clang-cl).Source
+          $architecture = "${{ matrix.host.host }}"
+          $triple = switch ($architecture) {
+            "arm64" { "aarch64-pc-windows-msvc" }
+            "amd64" { "x86_64-pc-windows-msvc" }
+            default { throw "Unsupported Windows host architecture" }
+          }
+          $assembly = if ($architecture -eq "amd64") {
+            $assembler = (Get-Command llvm-ml).Source
+            "-DCMAKE_ASM_MASM_COMPILER=$assembler"
+            "-DCMAKE_ASM_MASM_FLAGS=-m64"
+          }
+          cmake -G Ninja -S llvm-project/llvm -B .build/llvm `
+            -DCMAKE_BUILD_TYPE=Release `
+            "-DCMAKE_C_COMPILER=$compiler" `
+            "-DCMAKE_CXX_COMPILER=$compiler" `
+            "-DCMAKE_C_COMPILER_LAUNCHER:FILEPATH=$env:CLANG_CACHE_LAUNCHER" `
+            "-DCMAKE_CXX_COMPILER_LAUNCHER:FILEPATH=$env:CLANG_CACHE_LAUNCHER" `
+            "-DCMAKE_INCLUDE_SYSTEM_FLAG_C:STRING=-imsvc " `
+            "-DCMAKE_INCLUDE_SYSTEM_FLAG_CXX:STRING=-imsvc " `
+            "-DLLVM_HOST_TRIPLE=$triple" `
+            "-DLLVM_ENABLE_PROJECTS=clang;lld;lldb" `
+            "-DLLVM_TARGETS_TO_BUILD=AArch64;ARM;X86" `
+            -DLLVM_ENABLE_ASSERTIONS=OFF `
+            -DLLVM_INCLUDE_BENCHMARKS=OFF `
+            -DLLVM_INCLUDE_EXAMPLES=OFF `
+            -DLLVM_INCLUDE_TESTS=OFF `
+            -DLLDB_INCLUDE_TESTS=ON `
+            -DLLDB_ENABLE_CURSES=OFF `
+            -DLLDB_ENABLE_LIBEDIT=OFF `
+            -DLLDB_ENABLE_PYTHON=ON `
+            "-DPython3_EXECUTABLE=$((Get-Command python).Source)" `
+            @assembly
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify LLDB compiler cache
+        shell: pwsh
+        run: |
+          $cache = Get-Content .build/llvm/CMakeCache.txt
+          $expected = (Get-Item $env:CLANG_CACHE_LAUNCHER).FullName
+          foreach ($language in "C", "CXX") {
+            $name = "CMAKE_${language}_COMPILER_LAUNCHER:"
+            $setting = @($cache | Where-Object { $_.StartsWith($name) })
+            if ($setting.Count -ne 1) {
+              throw "$name was not configured"
+            }
+            $launcher = (Get-Item $setting[0].Split("=", 2)[1]).FullName
+            if ($launcher -ne $expected) {
+              throw "$name does not use $expected"
+            }
+          }
+          $executable = [IO.Path]::GetFileName($expected)
+          $configured = Select-String -Path .build/llvm/build.ninja `
+              -Pattern $executable -SimpleMatch -Quiet
+          if (!$configured) {
+            throw "Ninja does not use $expected"
+          }
+
+      - name: Build LLDB shared library
+        if: runner.os == 'Windows'
+        run: cmake --build .build/llvm --config Release --target liblldb
+
+      - name: Build LLDB and test utilities
+        run: >-
+          cmake --build .build/llvm --config Release --parallel
+          --target lldb-api-test-deps
+
+      - name: Prune LLDB CAS
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        shell: pwsh
+        run: |
+          $script = [IO.Path]::Join("${{ github.workspace }}", ".github",
+              "scripts", "Prune-SwiftCAS.ps1")
+          & $script -Path $env:LLVM_CACHE_CAS_PATH `
+              -SizeLimit ([int64]$env:LLVM_CAS_LIMIT)
+
+      - name: Remove previous LLDB CAS
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $caches = @(gh cache list --key $env:LLVM_CAS_PREFIX --limit 100 --json id |
+              ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($cache in $caches) {
+            gh cache delete $cache.id --repo $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Save LLDB CAS
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.LLVM_CACHE_CAS_PATH }}
+          key: ${{ env.LLVM_CAS_KEY }}
+
+      - name: Archive LLDB
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          tar --exclude='*.a' --exclude='*.dSYM' -czf lldb.tar.gz \
+            .build/llvm/bin .build/llvm/lib
+
+      - name: Archive LLDB
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $root = ".artifacts/lldb/.build/llvm"
+          New-Item -ItemType Directory -Force "$root/bin", "$root/lib" |
+              Out-Null
+          Copy-Item ".build/llvm/bin/*" "$root/bin" -Recurse
+          Get-ChildItem ".build/llvm/lib" -Directory | Where-Object {
+            $_.Name -match "python|site-packages"
+          } | Copy-Item -Destination "$root/lib" -Recurse
+          Compress-Archive -Path ".artifacts/lldb/.build" -DestinationPath lldb.zip
+
+      - name: Upload LLDB
+        uses: actions/upload-artifact@v7
+        with:
+          name: lldb-${{ matrix.host.id }}-${{ matrix.swift.build }}
+          path: lldb.${{ runner.os == 'Windows' && 'zip' || 'tar.gz' }}
+          if-no-files-found: error
+          retention-days: 2
+
+  dsx:
+    name: DSX · ${{ matrix.target.name }} · ${{ matrix.swift.build }}
+    needs: versions
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ${{ fromJSON(needs.versions.outputs.swift) }}
+        target: ${{ fromJSON(needs.versions.outputs.targets) }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Swift
+        uses: ./.github/actions/setup-swift
+        with:
+          version: ${{ matrix.swift.version }}
+          build: ${{ matrix.swift.build }}
+          architecture: ${{ matrix.target.host }}
+          android: ${{ matrix.target.sdk == 'android' }}
+          target: ${{ matrix.target.triple }}
+
+      - name: Configure Swift CAS
+        shell: pwsh
+        run: |
+          $path = [IO.Path]::Join("${{ github.workspace }}", ".build", "cas")
+          $prefix = "swift-cas-test-${{ matrix.target.id }}-${{ matrix.swift.build }}-"
+          "SWIFT_CAS_PATH=$path" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "SWIFT_CAS_PREFIX=$prefix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "SWIFT_CAS_KEY=${prefix}${{ github.run_id }}-${{ github.run_attempt }}" |
+              Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Restore Swift CAS
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.SWIFT_CAS_PATH }}
+          key: ${{ env.SWIFT_CAS_KEY }}
+          restore-keys: ${{ env.SWIFT_CAS_PREFIX }}
+
+      - name: Build and test DSX
+        id: build
+        uses: ./.github/actions/build-dsx
+        with:
+          scratch-path: .build/test/${{ matrix.target.id }}
+          configuration: debug
+          debug-info: >-
+            ${{ runner.os == 'Windows' && matrix.target.sdk != 'android' &&
+            'codeview' || '' }}
+          sdk: ${{ matrix.target.sdk }}
+          target: ${{ matrix.target.triple }}
+          test: ${{ matrix.target.test }}
+
+      - name: Package DSX
+        if: runner.os != 'Windows' && matrix.target.sdk != 'android'
+        shell: bash
+        env:
+          BIN: ${{ steps.build.outputs.bin }}
+          TARGET_ID: ${{ matrix.target.id }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/$TARGET_ID"
+          cp "$BIN/dsx" ".artifacts/$TARGET_ID/"
+          tar -czf ".artifacts/$TARGET_ID.tar.gz" -C .artifacts "$TARGET_ID"
+
+      - name: Package DSX
+        if: runner.os == 'Windows' && matrix.target.sdk != 'android'
+        shell: pwsh
+        env:
+          BIN: ${{ steps.build.outputs.bin }}
+          TARGET_ID: ${{ matrix.target.id }}
+        run: |
+          $output = ".artifacts/$env:TARGET_ID"
+          New-Item -ItemType Directory -Force $output | Out-Null
+          Copy-Item "$env:BIN/dsx.exe" $output
+          Compress-Archive -Path $output -DestinationPath ".artifacts/$env:TARGET_ID.zip"
+
+      - name: Package DSX
+        if: matrix.target.sdk == 'android'
+        shell: pwsh
+        env:
+          BIN: ${{ steps.build.outputs.bin }}
+          TARGET_ID: ${{ matrix.target.id }}
+        run: |
+          $output = ".artifacts/$env:TARGET_ID"
+          New-Item -ItemType Directory -Force $output | Out-Null
+          Copy-Item "$env:BIN/dsx" $output
+          tar -czf ".artifacts/$env:TARGET_ID.tar.gz" -C .artifacts `
+              $env:TARGET_ID
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Prune Swift CAS
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        shell: pwsh
+        run: |
+          $script = [IO.Path]::Join("${{ github.workspace }}", ".github", "scripts", "Prune-SwiftCAS.ps1")
+          foreach ($name in @("builtin", "generic")) {
+            $path = [IO.Path]::Join($env:SWIFT_CAS_PATH, $name)
+            if (Test-Path -LiteralPath $path -PathType Container) {
+              & $script -Path $path -SizeLimit ([int64]$env:SWIFT_CAS_LIMIT)
+            }
+          }
+
+      - name: Remove previous Swift CAS
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $caches = @(gh cache list --key $env:SWIFT_CAS_PREFIX --limit 100 --json id |
+              ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($cache in $caches) {
+            gh cache delete $cache.id --repo $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Save Swift CAS
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.SWIFT_CAS_PATH }}
+          key: ${{ env.SWIFT_CAS_KEY }}
+
+      - name: Upload DSX
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-${{ matrix.target.id }}-${{ matrix.swift.build }}
+          path: >-
+            .artifacts/*.${{ runner.os == 'Windows' && matrix.target.sdk !=
+            'android' && 'zip' || 'tar.gz' }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 2
+
+  compatibility:
+    name: LLDB · ${{ matrix.target.name }} · ${{ matrix.shard.name }} · ${{ matrix.swift.build }}
+    needs: [versions, lldb, dsx]
+    if: ${{ !cancelled() && needs.versions.result == 'success' }}
+    runs-on: ${{ matrix.target.compatibilityRunner || matrix.target.runner }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ${{ fromJSON(needs.versions.outputs.swift) }}
+        target: ${{ fromJSON(needs.versions.outputs.compatibility) }}
+        shard:
+          - name: commands
+            tests: commands,sanity,sample_test
+          - name: functionalities
+            tests: functionalities,terminal,source-manager
+          - name: languages
+            tests: lang,types,repl
+          - name: python
+            tests: python_api
+          - name: services
+            tests: lldbutil-tests,lua_api,macosx,qemu,riscv,symbol_ondemand,test_runner,test_utils,windows
+          - name: tools
+            tests: tools
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Checkout LLDB tests
+        uses: actions/checkout@v7
+        with:
+          repository: llvm/llvm-project
+          ref: ${{ needs.versions.outputs.llvm }}
+          path: llvm-project
+          fetch-depth: 1
+          sparse-checkout: lldb
+
+      - name: Install Swift
+        uses: ./.github/actions/setup-swift
+        with:
+          version: ${{ matrix.swift.version }}
+          build: ${{ matrix.swift.build }}
+          architecture: ${{ matrix.target.host }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: llvm-project/lldb/test/requirements.txt
+
+      - name: Install LLDB test dependencies
+        run: >-
+          python -m pip install --disable-pip-version-check
+          -r llvm-project/lldb/test/requirements.txt
+
+      - name: Install make
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install make --yes --no-progress
+
+      - name: Download LLDB
+        uses: actions/download-artifact@v8
+        with:
+          name: lldb-${{ matrix.target.lldb }}-${{ matrix.swift.build }}
+          path: .artifacts/lldb
+
+      - name: Download DSX
+        uses: actions/download-artifact@v8
+        with:
+          name: test-${{ matrix.target.id }}-${{ matrix.swift.build }}
+          path: .artifacts/dsx
+
+      - name: Extract test tools
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          tar -xzf .artifacts/lldb/lldb.tar.gz
+          tar -xzf ".artifacts/dsx/${{ matrix.target.id }}.tar.gz" -C .artifacts/dsx
+          echo "$GITHUB_WORKSPACE/.build/llvm/bin" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$GITHUB_WORKSPACE/.build/llvm/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Extract test tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Expand-Archive .artifacts/lldb/lldb.zip -DestinationPath . -Force
+          Expand-Archive ".artifacts/dsx/${{ matrix.target.id }}.zip" `
+              -DestinationPath .artifacts/dsx -Force
+          "$env:GITHUB_WORKSPACE\.build\llvm\bin" |
+              Out-File $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Authorize DSX debugging
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          llvm-project/lldb/scripts/macos-setup-codesign.sh
+          codesign --force --sign lldb_codesign \
+            --entitlements llvm-project/lldb/tools/debugserver/resources/debugserver-macosx-entitlements.plist \
+            ".artifacts/dsx/${{ matrix.target.id }}/dsx"
+
+      - name: Run LLDB API tests against DSX
+        if: matrix.target.sdk != 'android'
+        shell: pwsh
+        run: |
+          $exclusions = if ("${{ matrix.target.platform }}" -eq "remote-linux") {
+            @("--exclusions", ".github/scripts/lldb-linux.exclusions")
+          } else {
+            @()
+          }
+          python .github/scripts/run-lldb-tests.py `
+            --arch "${{ matrix.target.arch }}" `
+            --dsx ".artifacts/dsx/${{ matrix.target.id }}/dsx${{ runner.os == 'Windows' && '.exe' || '' }}" `
+            --platform "${{ matrix.target.platform }}" `
+            --source llvm-project `
+            --tests "${{ matrix.shard.tests }}" `
+            --tools .build/llvm/bin `
+            --triple "${{ matrix.target.triple }}" `
+            @exclusions
+
+      - name: Start Android emulator
+        if: matrix.target.sdk == 'android'
+        shell: bash
+        run: |
+          set -euo pipefail
+          avd="$RUNNER_TEMP/android-avd"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          avdmanager="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          emulator="$ANDROID_HOME/emulator/emulator"
+          mkdir -p "$avd"
+          export ANDROID_AVD_HOME="$avd"
+          echo "ANDROID_AVD_HOME=$avd" >> "$GITHUB_ENV"
+          sudo chmod 666 /dev/kvm
+          "$sdkmanager" 'platform-tools' 'emulator' \
+            'system-images;android-35;google_apis;x86_64'
+          echo no | "$avdmanager" create avd --force --name dsx \
+            --package 'system-images;android-35;google_apis;x86_64'
+          "$emulator" -list-avds | grep -Fx dsx
+          "$emulator" -avd dsx -no-window -no-audio -no-boot-anim \
+            -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          echo "ANDROID_EMULATOR_PID=$!" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Run LLDB API tests against DSX on Android
+        if: matrix.target.sdk == 'android'
+        shell: pwsh
+        run: >-
+          python .github/scripts/run-lldb-tests.py
+          --android
+          --arch x86_64
+          --dsx .artifacts/dsx/android-x86_64/dsx
+          --exclusions .github/scripts/lldb-linux.exclusions
+          --platform remote-android
+          --source llvm-project
+          --tests "${{ matrix.shard.tests }}"
+          --tools .build/llvm/bin
+          --triple "${{ matrix.target.triple }}"
+          --working-directory /data/local/tmp/dsx-lldb
+
+      - name: Stop Android emulator
+        if: always() && matrix.target.sdk == 'android'
+        shell: bash
+        run: |
+          "$ANDROID_HOME/platform-tools/adb" emu kill || true
+          kill "$ANDROID_EMULATOR_PID" 2>/dev/null || true
+
+      - name: Upload LLDB failure logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lldb-logs-${{ matrix.target.id }}-${{ matrix.shard.name }}-${{ matrix.swift.build }}
+          path: |
+            ${{ runner.temp }}/dsx-server.log
+            ${{ runner.temp }}/emulator.log
+            ${{ runner.temp }}/dsx-lldb-*/lldb-test-build.noindex/**/Error_*.log
+            ${{ runner.temp }}/dsx-lldb-*/lldb-test-build.noindex/**/Failure_*.log
+            ${{ runner.temp }}/dsx-lldb-*/lldb-test-build.noindex/**/UnexpectedSuccess_*.log
+          if-no-files-found: ignore
+          retention-days: 7

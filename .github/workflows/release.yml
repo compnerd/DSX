@@ -1,0 +1,169 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: ${{ format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: true
+
+env:
+  SWIFT_CAS_LIMIT: 536870912
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    outputs:
+      swift: ${{ steps.versions.outputs.swift }}
+      targets: ${{ steps.versions.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: versions
+        shell: bash
+        run: |
+          echo "swift=$(jq -c .swift .github/matrix.json)" >> "$GITHUB_OUTPUT"
+          echo "targets=$(jq -c .targets .github/matrix.json)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.target.name }} · ${{ matrix.swift.build }}
+    needs: versions
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ${{ fromJSON(needs.versions.outputs.swift) }}
+        # Swift.org has no 6.4 runtime SDK for Linux i386/ARMv7,
+        # FreeBSD, or OpenBSD.
+        target: ${{ fromJSON(needs.versions.outputs.targets) }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Swift
+        uses: ./.github/actions/setup-swift
+        with:
+          version: ${{ matrix.swift.version }}
+          build: ${{ matrix.swift.build }}
+          architecture: ${{ matrix.target.host }}
+          android: ${{ matrix.target.sdk == 'android' }}
+          target: ${{ matrix.target.triple }}
+
+      - name: Configure Swift CAS
+        shell: pwsh
+        run: |
+          $path = [IO.Path]::Join("${{ github.workspace }}", ".build", "cas")
+          $prefix = "swift-cas-release-${{ matrix.target.id }}-${{ matrix.swift.build }}-"
+          "SWIFT_CAS_PATH=$path" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "SWIFT_CAS_PREFIX=$prefix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "SWIFT_CAS_KEY=${prefix}${{ github.run_id }}-${{ github.run_attempt }}" |
+              Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Restore Swift CAS
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.SWIFT_CAS_PATH }}
+          key: ${{ env.SWIFT_CAS_KEY }}
+          restore-keys: ${{ env.SWIFT_CAS_PREFIX }}
+
+      - name: Build release products
+        id: build
+        uses: ./.github/actions/build-dsx
+        with:
+          scratch-path: .build/release/${{ matrix.target.id }}
+          configuration: release
+          debug-info: ${{ runner.os == 'Windows' && matrix.target.sdk != 'android' && 'codeview' || 'none' }}
+          optimize-size: true
+          sdk: ${{ matrix.target.sdk }}
+          strip-reflection: true
+          target: ${{ matrix.target.triple }}
+
+      - name: Package release products
+        if: runner.os != 'Windows' && matrix.target.sdk != 'android'
+        shell: bash
+        env:
+          BIN: ${{ steps.build.outputs.bin }}
+          TARGET: ${{ matrix.target.triple }}
+        run: |
+          set -euo pipefail
+          output=".artifacts/$TARGET-dsx"
+          mkdir -p "$output"
+          cp "$BIN/dsx" "$output/"
+          find "$BIN" -maxdepth 1 -name 'libDSX.*' -exec cp {} "$output/" \;
+          cp LICENSE README.md "$output/"
+          tar -czf ".artifacts/$TARGET-dsx.tar.gz" -C .artifacts "$TARGET-dsx"
+
+      - name: Package release products
+        if: runner.os == 'Windows' && matrix.target.sdk != 'android'
+        shell: pwsh
+        env:
+          BIN: ${{ steps.build.outputs.bin }}
+          TARGET: ${{ matrix.target.triple }}
+        run: |
+          $output = ".artifacts/$($env:TARGET)-dsx"
+          New-Item -ItemType Directory -Force $output | Out-Null
+          Copy-Item "$env:BIN/dsx.exe", "$env:BIN/DSX.dll" $output
+          Get-ChildItem $env:BIN -File | Where-Object {
+            $_.Name -in @("DSX.lib", "DSX.pdb", "dsx.pdb")
+          } | Copy-Item -Destination $output
+          Copy-Item LICENSE, README.md $output
+          $archive = ".artifacts/$($env:TARGET)-dsx.zip"
+          Compress-Archive -Path $output -DestinationPath $archive
+
+      - name: Package release products
+        if: matrix.target.sdk == 'android'
+        shell: pwsh
+        env:
+          BIN: ${{ steps.build.outputs.bin }}
+          TARGET: ${{ matrix.target.triple }}
+        run: |
+          $output = ".artifacts/$($env:TARGET)-dsx"
+          New-Item -ItemType Directory -Force $output | Out-Null
+          Copy-Item "$env:BIN/dsx" $output
+          Get-ChildItem $env:BIN -File -Filter "libDSX.*" | Copy-Item -Destination $output
+          Copy-Item LICENSE, README.md $output
+          tar -czf ".artifacts/$($env:TARGET)-dsx.tar.gz" -C .artifacts "$($env:TARGET)-dsx"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Prune Swift CAS
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        shell: pwsh
+        run: |
+          $script = [IO.Path]::Join("${{ github.workspace }}", ".github", "scripts", "Prune-SwiftCAS.ps1")
+          foreach ($name in @("builtin", "generic")) {
+            $path = [IO.Path]::Join($env:SWIFT_CAS_PATH, $name)
+            if (Test-Path -LiteralPath $path -PathType Container) {
+              & $script -Path $path -SizeLimit ([int64]$env:SWIFT_CAS_LIMIT)
+            }
+          }
+
+      - name: Remove previous Swift CAS
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $caches = @(gh cache list --key $env:SWIFT_CAS_PREFIX --limit 100 --json id | ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($cache in $caches) {
+            gh cache delete $cache.id --repo $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Save Swift CAS
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.SWIFT_CAS_PATH }}
+          key: ${{ env.SWIFT_CAS_KEY }}
+
+      - name: Upload release products
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target.triple }}-dsx
+          path: .artifacts/*.${{ runner.os == 'Windows' && matrix.target.sdk != 'android' && 'zip' || 'tar.gz' }}
+          include-hidden-files: true
+          if-no-files-found: error

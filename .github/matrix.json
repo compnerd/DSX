@@ -1,0 +1,177 @@
+{
+  "swift": [
+    {
+      "version": "swift-6.4.x-branch",
+      "build": "6.4.x-DEVELOPMENT-SNAPSHOT-2026-08-28-a"
+    }
+  ],
+  "hosts": [
+    {
+      "name": "Darwin ARM64",
+      "id": "darwin-arm64",
+      "runner": "macos-26",
+      "host": "arm64"
+    },
+    {
+      "name": "Windows ARM64",
+      "id": "windows-arm64",
+      "runner": "windows-11-arm",
+      "host": "arm64"
+    },
+    {
+      "name": "Windows x86_64",
+      "id": "windows-x86_64",
+      "runner": "windows-latest",
+      "host": "amd64"
+    },
+    {
+      "name": "Linux ARM64",
+      "id": "linux-arm64",
+      "runner": "ubuntu-24.04-arm",
+      "host": "arm64"
+    },
+    {
+      "name": "Linux x86_64",
+      "id": "linux-x86_64",
+      "runner": "ubuntu-latest",
+      "host": "amd64"
+    }
+  ],
+  "targets": [
+    {
+      "name": "Darwin ARM64",
+      "id": "darwin-arm64",
+      "runner": "macos-26",
+      "host": "arm64",
+      "triple": "arm64-apple-macosx26.0",
+      "sdk": "native",
+      "test": true,
+      "compatibility": true,
+      "arch": "arm64",
+      "lldb": "darwin-arm64",
+      "platform": "remote-macosx"
+    },
+    {
+      "name": "Darwin x86_64",
+      "id": "darwin-x86_64",
+      "runner": "macos-26",
+      "host": "arm64",
+      "triple": "x86_64-apple-macosx26.0",
+      "sdk": "native",
+      "test": true,
+      "compatibility": true,
+      "arch": "x86_64",
+      "lldb": "darwin-arm64",
+      "platform": "remote-macosx"
+    },
+    {
+      "name": "Windows ARM64",
+      "id": "windows-arm64",
+      "runner": "windows-11-arm",
+      "host": "arm64",
+      "triple": "aarch64-unknown-windows-msvc",
+      "sdk": "native",
+      "test": true,
+      "compatibility": true,
+      "arch": "arm64",
+      "lldb": "windows-arm64",
+      "platform": "remote-windows"
+    },
+    {
+      "name": "Windows x86_64",
+      "id": "windows-x86_64",
+      "runner": "windows-latest",
+      "host": "amd64",
+      "triple": "x86_64-unknown-windows-msvc",
+      "sdk": "native",
+      "test": true,
+      "compatibility": true,
+      "arch": "x86_64",
+      "lldb": "windows-x86_64",
+      "platform": "remote-windows"
+    },
+    {
+      "name": "Windows x86",
+      "id": "windows-x86",
+      "runner": "windows-latest",
+      "host": "amd64",
+      "triple": "i686-unknown-windows-msvc",
+      "sdk": "native",
+      "test": false,
+      "compatibility": true,
+      "arch": "i386",
+      "lldb": "windows-x86_64",
+      "platform": "remote-windows"
+    },
+    {
+      "name": "Linux ARM64",
+      "id": "linux-arm64",
+      "runner": "ubuntu-24.04-arm",
+      "host": "arm64",
+      "triple": "aarch64-unknown-linux-gnu",
+      "sdk": "native",
+      "test": true,
+      "compatibility": true,
+      "arch": "arm64",
+      "lldb": "linux-arm64",
+      "platform": "remote-linux"
+    },
+    {
+      "name": "Linux x86_64",
+      "id": "linux-x86_64",
+      "runner": "ubuntu-latest",
+      "host": "amd64",
+      "triple": "x86_64-unknown-linux-gnu",
+      "sdk": "native",
+      "test": true,
+      "compatibility": true,
+      "arch": "x86_64",
+      "lldb": "linux-x86_64",
+      "platform": "remote-linux"
+    },
+    {
+      "name": "Android ARM64",
+      "id": "android-arm64",
+      "runner": "windows-latest",
+      "host": "amd64",
+      "triple": "aarch64-unknown-linux-android28",
+      "sdk": "android",
+      "test": false,
+      "compatibility": false
+    },
+    {
+      "name": "Android ARMv7",
+      "id": "android-armv7",
+      "runner": "windows-latest",
+      "host": "amd64",
+      "triple": "armv7-unknown-linux-android28",
+      "sdk": "android",
+      "test": false,
+      "compatibility": false
+    },
+    {
+      "name": "Android x86_64",
+      "id": "android-x86_64",
+      "runner": "windows-latest",
+      "host": "amd64",
+      "triple": "x86_64-unknown-linux-android28",
+      "sdk": "android",
+      "test": false,
+      "compatibility": true,
+      "arch": "x86_64",
+      "lldb": "linux-x86_64",
+      "platform": "remote-android",
+      "compatibilityRunner": "ubuntu-latest"
+    },
+    {
+      "name": "Android x86",
+      "id": "android-x86",
+      "runner": "windows-latest",
+      "host": "amd64",
+      "triple": "i686-unknown-linux-android28",
+      "sdk": "android",
+      "test": false,
+      "compatibility": false
+    }
+  ]
+}

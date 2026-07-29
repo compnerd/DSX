@@ -1,0 +1,165 @@
+name: Build DSX
+description: Build the DSX library and executable
+
+inputs:
+  scratch-path:
+    description: SwiftPM build directory
+    required: true
+  configuration:
+    description: SwiftPM build configuration
+    required: true
+  debug-info:
+    description: Debug information format
+    required: false
+  optimize-size:
+    description: Optimize the release build for size
+    required: false
+    default: 'false'
+  sdk:
+    description: Target SDK family
+    required: true
+  strip-reflection:
+    description: Strip Swift reflection metadata
+    required: false
+    default: 'false'
+  target:
+    description: Target triple
+    required: true
+  test:
+    description: Run the package tests
+    required: false
+    default: 'false'
+
+outputs:
+  bin:
+    description: SwiftPM binary output directory
+    value: ${{ steps.build.outputs.bin }}
+
+runs:
+  using: composite
+  steps:
+    - id: build
+      name: Build products
+      shell: pwsh
+      env:
+        SCRATCH_PATH: ${{ inputs.scratch-path }}
+        CONFIGURATION: ${{ inputs.configuration }}
+        DEBUG_INFO: ${{ inputs.debug-info }}
+        OPTIMIZE_SIZE: ${{ inputs.optimize-size }}
+        SDK: ${{ inputs.sdk }}
+        STRIP_REFLECTION: ${{ inputs.strip-reflection }}
+        TARGET: ${{ inputs.target }}
+        TEST: ${{ inputs.test }}
+      run: |
+        $hostarguments = @(
+          "--scratch-path", $env:SCRATCH_PATH,
+          "--configuration", $env:CONFIGURATION
+        )
+        $crossarchitecture = $env:TARGET -like "i686-*-windows-*"
+        $arguments = $hostarguments
+        if ($crossarchitecture) {
+          $arguments += @("--arch", "i686")
+        } else {
+          $arguments += @("--triple", $env:TARGET)
+        }
+        if ($env:SDK -eq "android") {
+          $arguments += @(
+            "--swift-sdks-path", $env:ANDROID_SWIFT_SDKS_PATH,
+            "--swift-sdk", "android",
+            "--static-swift-stdlib"
+          )
+        }
+        $env:EnableSwiftCachingByDefault = "YES"
+        $env:EnableSwiftExplicitModulesByDefault = "YES"
+        $env:CompilationCachingCASPath = $env:SWIFT_CAS_PATH
+        $env:CompilationCachingDiskSizeLimit = $env:SWIFT_CAS_LIMIT
+        if ($crossarchitecture) {
+          & swift build @hostarguments --product DSXCodeGen
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        $flags = @()
+        $apple = $env:TARGET -like "*-apple-*"
+        if ($apple) {
+          # Swift Build's integrated Clang CAS backend is Mach-O-only.
+          $env:EnableClangCachingByDefault = "YES"
+        }
+        if ($env:DEBUG_INFO) {
+          $flags = @("-debug-info-format", $env:DEBUG_INFO) + $flags
+        }
+        if ($env:OPTIMIZE_SIZE -eq "true") {
+          $flags += @("-Xswiftc", "-Osize")
+        }
+        if ($env:STRIP_REFLECTION -eq "true") {
+          $flags += @(
+            "-Xswiftc", "-Xfrontend",
+            "-Xswiftc", "-disable-reflection-metadata"
+          )
+        }
+        & swift build @arguments @flags --product DSX
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & swift build @arguments @flags --product dsx
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $bin = & swift build @arguments --show-bin-path
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $executable = if ($env:TARGET -like "*-windows-*") {
+          "dsx.exe"
+        } else {
+          "dsx"
+        }
+        $product = [IO.Path]::Combine($bin, $executable)
+        if (![IO.File]::Exists($product)) {
+          $products = [IO.Path]::Combine($env:SCRATCH_PATH, "out", "Products")
+          $matches = @(Get-ChildItem $products -Recurse -File `
+              -Filter $executable)
+          if ($matches.Count -ne 1) {
+            throw "Unable to identify the SwiftBuild product directory"
+          }
+          $product = $matches[0].FullName
+          $bin = $matches[0].Directory.FullName
+        }
+        if ($env:TARGET -like "*-windows-*") {
+          $architecture = switch -Wildcard ($env:TARGET) {
+            "aarch64-*" { "aarch64"; break }
+            "i686-*" { "i386"; break }
+            "x86_64-*" { "x86_64"; break }
+            default { throw "Unsupported Windows target: $env:TARGET" }
+          }
+          $headers = & llvm-readobj --file-headers $product
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (($headers -join "`n") -notmatch "Arch: $architecture") {
+            throw "SwiftBuild produced the wrong Windows architecture"
+          }
+        }
+        if ($env:TEST -eq "true") {
+          $testflags = $flags
+          if ($apple) {
+            # This SwiftBuild snapshot does not invoke Swift Testing on Darwin.
+            $information = & swift -print-target-info | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $testing = [IO.Path]::Combine(
+                $information.paths.runtimeResourcePath, "macosx", "testing")
+            $testflags += @(
+              "-Xlinker", "-rpath",
+              "-Xlinker", $testing
+            )
+            & swift build @arguments @testflags --build-tests `
+                --disable-xctest --enable-swift-testing
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $bundles = @(Get-ChildItem $bin -Filter "*.xctest")
+            if ($bundles.Count -eq 0) {
+              throw "SwiftBuild did not produce any test bundles"
+            }
+            foreach ($bundle in $bundles) {
+              if ($env:TARGET -like "x86_64-apple-*") {
+                & arch -x86_64 xcrun xctest $bundle.FullName
+              } else {
+                & xcrun xctest $bundle.FullName
+              }
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          } else {
+            & swift test @arguments @testflags --disable-xctest
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+        }
+        "bin=$bin" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
